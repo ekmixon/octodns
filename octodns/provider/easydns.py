@@ -48,23 +48,25 @@ class EasyDNSClient(object):
     domain_portfolio = 'myport'
 
     def __init__(self, token, api_key, currency, portfolio, sandbox):
-        self.log = logging.getLogger('EasyDNSProvider[{}]'.format(id))
+        self.log = logging.getLogger(f'EasyDNSProvider[{id}]')
         self.token = token
         self.api_key = api_key
         self.default_currency = currency
         self.domain_portfolio = portfolio
         self.apienv = 'sandbox' if sandbox else 'live'
-        auth_key = '{}:{}'.format(self.token, self.api_key)
+        auth_key = f'{self.token}:{self.api_key}'
         self.auth_key = base64.b64encode(auth_key.encode("utf-8"))
         self.base_path = self.SANDBOX if sandbox else self.LIVE
         sess = Session()
-        sess.headers.update({'Authorization': 'Basic {}'
-                             .format(self.auth_key.decode('utf-8'))})
+        sess.headers.update(
+            {'Authorization': f"Basic {self.auth_key.decode('utf-8')}"}
+        )
+
         sess.headers.update({'accept': 'application/json'})
         self._sess = sess
 
     def _request(self, method, path, params=None, data=None):
-        url = '{}{}'.format(self.base_path, path)
+        url = f'{self.base_path}{path}'
         resp = self._sess.request(method, url, params=params, json=data)
         if resp.status_code == 400:
             self.log.debug('Response code 400, path=%s', path)
@@ -73,20 +75,20 @@ class EasyDNSClient(object):
             raise EasyDNSClientBadRequest()
         if resp.status_code == 401:
             raise EasyDNSClientUnauthorized()
-        if resp.status_code == 403 or resp.status_code == 404:
+        if resp.status_code in [403, 404]:
             raise EasyDNSClientNotFound()
         resp.raise_for_status()
         return resp
 
     def domain(self, name):
-        path = '/domain/{}'.format(name)
+        path = f'/domain/{name}'
         return self._request('GET', path).json()
 
     def domain_create(self, name):
         # EasyDNS allows for new domains to be created for the purpose of DNS
         # only, or with domain registration. This function creates a DNS only
         # record expectig the domain to be registered already
-        path = '/domains/add/{}'.format(name)
+        path = f'/domains/add/{name}'
         domain_data = {'service': 'dns',
                        'term': 1,
                        'dns_only': 1,
@@ -102,14 +104,14 @@ class EasyDNSClient(object):
         records = self.records(name, True)
         for record in records:
             if record['host'] in ('', 'www') \
-               and record['type'] in ('A', 'MX', 'CNAME'):
+                   and record['type'] in ('A', 'MX', 'CNAME'):
                 self.record_delete(name, record['id'])
 
     def records(self, zone_name, raw=False):
         if raw:
-            path = '/zones/records/all/{}'.format(zone_name)
+            path = f'/zones/records/all/{zone_name}'
         else:
-            path = '/zones/records/parsed/{}'.format(zone_name)
+            path = f'/zones/records/parsed/{zone_name}'
 
         ret = []
         resp = self._request('GET', path).json()
@@ -122,12 +124,12 @@ class EasyDNSClient(object):
 
             # change any apex value to zone name
             if record['rdata'] == '@':
-                record['rdata'] = '{}.'.format(zone_name)
+                record['rdata'] = f'{zone_name}.'
 
         return ret
 
     def record_create(self, zone_name, params):
-        path = '/zones/records/add/{}/{}'.format(zone_name, params['type'])
+        path = f"/zones/records/add/{zone_name}/{params['type']}"
         # change empty name string to @, EasyDNS uses @ for apex record names
         params['host'] = params['name']
         if params['host'] == '':
@@ -135,7 +137,7 @@ class EasyDNSClient(object):
         self._request('PUT', path, data=params)
 
     def record_delete(self, zone_name, record_id):
-        path = '/zones/records/{}/{}'.format(zone_name, record_id)
+        path = f'/zones/records/{zone_name}/{record_id}'
         self._request('DELETE', path)
 
 
@@ -163,7 +165,7 @@ class EasyDNSProvider(BaseProvider):
 
     def __init__(self, id, token, api_key, currency='CAD', portfolio='myport',
                  sandbox=False, *args, **kwargs):
-        self.log = logging.getLogger('EasyDNSProvider[{}]'.format(id))
+        self.log = logging.getLogger(f'EasyDNSProvider[{id}]')
         self.log.debug('__init__: id=%s, token=***', id)
         super(EasyDNSProvider, self).__init__(id, *args, **kwargs)
         self._client = EasyDNSClient(token, api_key, currency, portfolio,
@@ -222,19 +224,14 @@ class EasyDNSProvider(BaseProvider):
 
     def _data_for_CNAME(self, _type, records):
         record = records[0]
-        return {
-            'ttl': record['ttl'],
-            'type': _type,
-            'value': '{}'.format(record['rdata'])
-        }
+        return {'ttl': record['ttl'], 'type': _type, 'value': f"{record['rdata']}"}
 
     def _data_for_MX(self, _type, records):
-        values = []
-        for record in records:
-            values.append({
-                'preference': record['prio'],
-                'exchange': '{}'.format(record['rdata'])
-            })
+        values = [
+            {'preference': record['prio'], 'exchange': f"{record['rdata']}"}
+            for record in records
+        ]
+
         return {
             'ttl': records[0]['ttl'],
             'type': _type,
@@ -244,7 +241,7 @@ class EasyDNSProvider(BaseProvider):
     def _data_for_NS(self, _type, records):
         values = []
         for record in records:
-            data = '{}'.format(record['rdata'])
+            data = f"{record['rdata']}"
             values.append(data)
         return {
             'ttl': records[0]['ttl'],
@@ -317,7 +314,7 @@ class EasyDNSProvider(BaseProvider):
         before = len(zone.records)
         for name, types in values.items():
             for _type, records in types.items():
-                data_for = getattr(self, '_data_for_{}'.format(_type))
+                data_for = getattr(self, f'_data_for_{_type}')
                 record = Record.new(zone, name, data_for(_type, records),
                                     source=self, lenient=lenient)
                 zone.add_record(record, lenient=lenient)
@@ -343,21 +340,16 @@ class EasyDNSProvider(BaseProvider):
     def _params_for_CAA(self, record):
         for value in record.values:
             yield {
-                'rdata': "{} {} {}".format(value.flags, value.tag,
-                                           value.value),
+                'rdata': f"{value.flags} {value.tag} {value.value}",
                 'name': record.name,
                 'ttl': record.ttl,
-                'type': record._type
+                'type': record._type,
             }
 
     def _params_for_NAPTR(self, record):
         for value in record.values:
-            content = '{} {} "{}" "{}" "{}" {}'.format(value.order,
-                                                       value.preference,
-                                                       value.flags,
-                                                       value.service,
-                                                       value.regexp,
-                                                       value.replacement)
+            content = f'{value.order} {value.preference} "{value.flags}" "{value.service}" "{value.regexp}" {value.replacement}'
+
             yield {
                 'rdata': content,
                 'name': record.name,
@@ -388,8 +380,7 @@ class EasyDNSProvider(BaseProvider):
     def _params_for_SRV(self, record):
         for value in record.values:
             yield {
-                'rdata': "{} {} {} {}".format(value.priority, value.port,
-                                              value.weight, value.target),
+                'rdata': f"{value.priority} {value.port} {value.weight} {value.target}",
                 'name': record.name,
                 'ttl': record.ttl,
                 'type': record._type,
@@ -406,7 +397,7 @@ class EasyDNSProvider(BaseProvider):
 
     def _apply_Create(self, change):
         new = change.new
-        params_for = getattr(self, '_params_for_{}'.format(new._type))
+        params_for = getattr(self, f'_params_for_{new._type}')
         for params in params_for(new):
             self._client.record_create(new.zone.name[:-1], params)
 
@@ -439,7 +430,7 @@ class EasyDNSProvider(BaseProvider):
 
         for change in changes:
             class_name = change.__class__.__name__
-            getattr(self, '_apply_{}'.format(class_name))(change)
+            getattr(self, f'_apply_{class_name}')(change)
 
         # Clear out the cache if any
         self._zone_records.pop(desired.name, None)

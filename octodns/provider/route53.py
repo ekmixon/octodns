@@ -34,9 +34,6 @@ class _Route53Record(EqualityTupleMixin):
 
     @classmethod
     def _new_dynamic(cls, provider, record, hosted_zone_id, creating):
-        # Creates the RRSets that correspond to the given dynamic record
-        ret = set()
-
         # HostedZoneId wants just the last bit, but the place we're getting
         # this from looks like /hostedzone/Z424CArX3BB224
         hosted_zone_id = hosted_zone_id.split('/', 2)[-1]
@@ -45,8 +42,11 @@ class _Route53Record(EqualityTupleMixin):
         # record object. Its only used if all other values fail their
         # healthchecks, which hopefully never happens.
         fqdn = record.fqdn
-        ret.add(_Route53Record(provider, record, creating,
-                               '_octodns-default-pool.{}'.format(fqdn)))
+        ret = {
+            _Route53Record(
+                provider, record, creating, f'_octodns-default-pool.{fqdn}'
+            )
+        }
 
         # Pools
         for pool_name, pool in record.dynamic.pools.items():
@@ -58,9 +58,7 @@ class _Route53Record(EqualityTupleMixin):
             ret.add(_Route53DynamicPool(provider, hosted_zone_id, record,
                                         pool_name, creating))
 
-            # Create the fallback for this pool
-            fallback = pool.data.get('fallback', False)
-            if fallback:
+            if fallback := pool.data.get('fallback', False):
                 # We have an explicitly configured fallback, another pool to
                 # use if all our values go red. This RRSet configures that pool
                 # as the next best option
@@ -88,8 +86,7 @@ class _Route53Record(EqualityTupleMixin):
         # Rules
         for i, rule in enumerate(record.dynamic.rules):
             pool_name = rule.data['pool']
-            geos = rule.data.get('geos', [])
-            if geos:
+            if geos := rule.data.get('geos', []):
                 for geo in geos:
                     # Create a RRSet for each geo in each rule that uses the
                     # desired target pool
@@ -108,9 +105,8 @@ class _Route53Record(EqualityTupleMixin):
     @classmethod
     def _new_geo(cls, provider, record, creating):
         # Creates the RRSets that correspond to the given geo record
-        ret = set()
+        ret = {_Route53GeoDefault(provider, record, creating)}
 
-        ret.add(_Route53GeoDefault(provider, record, creating))
         for ident, geo in record.geo.items():
             ret.add(_Route53GeoRecord(provider, record, ident, geo,
                                       creating))
@@ -122,20 +118,19 @@ class _Route53Record(EqualityTupleMixin):
         # Creates the RRSets that correspond to the given record
 
         if getattr(record, 'dynamic', False):
-            ret = cls._new_dynamic(provider, record, hosted_zone_id, creating)
-            return ret
+            return cls._new_dynamic(provider, record, hosted_zone_id, creating)
         elif getattr(record, 'geo', False):
             return cls._new_geo(provider, record, creating)
 
         # Its a simple record that translates into a single RRSet
-        return set((_Route53Record(provider, record, creating),))
+        return {_Route53Record(provider, record, creating)}
 
     def __init__(self, provider, record, creating, fqdn_override=None):
         self.fqdn = fqdn_override or record.fqdn
         self._type = record._type
         self.ttl = record.ttl
 
-        values_for = getattr(self, '_values_for_{}'.format(self._type))
+        values_for = getattr(self, f'_values_for_{self._type}')
         self.values = values_for(record)
 
     def mod(self, action, existing_rrsets):
@@ -155,7 +150,7 @@ class _Route53Record(EqualityTupleMixin):
 
     def __hash__(self):
         'sub-classes should never use this method'
-        return '{}:{}'.format(self.fqdn, self._type).__hash__()
+        return f'{self.fqdn}:{self._type}'.__hash__()
 
     def _equality_tuple(self):
         '''Sub-classes should call up to this and return its value and add
@@ -163,8 +158,7 @@ class _Route53Record(EqualityTupleMixin):
         return (self.__class__.__name__, self.fqdn, self._type)
 
     def __repr__(self):
-        return '_Route53Record<{} {} {} {}>'.format(self.fqdn, self._type,
-                                                    self.ttl, self.values)
+        return f'_Route53Record<{self.fqdn} {self._type} {self.ttl} {self.values}>'
 
     def _value_convert_value(self, value, record):
         return value
@@ -183,7 +177,7 @@ class _Route53Record(EqualityTupleMixin):
     _values_for_NS = _values_for_values
 
     def _value_convert_CAA(self, value, record):
-        return '{} {} "{}"'.format(value.flags, value.tag, value.value)
+        return f'{value.flags} {value.tag} "{value.value}"'
 
     def _values_for_CAA(self, record):
         return [self._value_convert_CAA(v, record) for v in record.values]
@@ -195,18 +189,13 @@ class _Route53Record(EqualityTupleMixin):
     _values_for_PTR = _values_for_value
 
     def _value_convert_MX(self, value, record):
-        return '{} {}'.format(value.preference, value.exchange)
+        return f'{value.preference} {value.exchange}'
 
     def _values_for_MX(self, record):
         return [self._value_convert_MX(v, record) for v in record.values]
 
     def _value_convert_NAPTR(self, value, record):
-        return '{} {} "{}" "{}" "{}" {}' \
-            .format(value.order, value.preference,
-                    value.flags if value.flags else '',
-                    value.service if value.service else '',
-                    value.regexp if value.regexp else '',
-                    value.replacement)
+        return f"""{value.order} {value.preference} "{value.flags or ''}" "{value.service or ''}" "{value.regexp or ''}" {value.replacement}"""
 
     def _values_for_NAPTR(self, record):
         return [self._value_convert_NAPTR(v, record) for v in record.values]
@@ -224,8 +213,7 @@ class _Route53Record(EqualityTupleMixin):
     _values_for_TXT = _values_for_quoted
 
     def _value_for_SRV(self, value, record):
-        return '{} {} {} {}'.format(value.priority, value.weight,
-                                    value.port, value.target)
+        return f'{value.priority} {value.weight} {value.port} {value.target}'
 
     def _values_for_SRV(self, record):
         return [self._value_for_SRV(v, record) for v in record.values]
@@ -235,9 +223,9 @@ class _Route53DynamicPool(_Route53Record):
 
     def __init__(self, provider, hosted_zone_id, record, pool_name, creating,
                  target_name=None):
-        fqdn_override = '_octodns-{}-pool.{}'.format(pool_name, record.fqdn)
+        fqdn_override = f'_octodns-{pool_name}-pool.{record.fqdn}'
         super(_Route53DynamicPool, self) \
-            .__init__(provider, record, creating, fqdn_override=fqdn_override)
+                .__init__(provider, record, creating, fqdn_override=fqdn_override)
 
         self.hosted_zone_id = hosted_zone_id
         self.pool_name = pool_name
@@ -245,12 +233,10 @@ class _Route53DynamicPool(_Route53Record):
         self.target_name = target_name
         if target_name:
             # We're pointing down the chain
-            self.target_dns_name = '_octodns-{}-pool.{}'.format(target_name,
-                                                                record.fqdn)
+            self.target_dns_name = f'_octodns-{target_name}-pool.{record.fqdn}'
         else:
             # We're a paimary, point at our values
-            self.target_dns_name = '_octodns-{}-value.{}'.format(pool_name,
-                                                                 record.fqdn)
+            self.target_dns_name = f'_octodns-{pool_name}-value.{record.fqdn}'
 
     @property
     def mode(self):
@@ -259,9 +245,8 @@ class _Route53DynamicPool(_Route53Record):
     @property
     def identifer(self):
         if self.target_name:
-            return '{}-{}-{}'.format(self.pool_name, self.mode,
-                                     self.target_name)
-        return '{}-{}'.format(self.pool_name, self.mode)
+            return f'{self.pool_name}-{self.mode}-{self.target_name}'
+        return f'{self.pool_name}-{self.mode}'
 
     def mod(self, action, existing_rrsets):
         return {
@@ -280,12 +265,10 @@ class _Route53DynamicPool(_Route53Record):
         }
 
     def __hash__(self):
-        return '{}:{}:{}'.format(self.fqdn, self._type,
-                                 self.identifer).__hash__()
+        return f'{self.fqdn}:{self._type}:{self.identifer}'.__hash__()
 
     def __repr__(self):
-        return '_Route53DynamicPool<{} {} {} {}>' \
-            .format(self.fqdn, self._type, self.mode, self.target_dns_name)
+        return f'_Route53DynamicPool<{self.fqdn} {self._type} {self.mode} {self.target_dns_name}>'
 
 
 class _Route53DynamicRule(_Route53Record):
@@ -299,12 +282,11 @@ class _Route53DynamicRule(_Route53Record):
         self.pool_name = pool_name
         self.index = index
 
-        self.target_dns_name = '_octodns-{}-pool.{}'.format(pool_name,
-                                                            record.fqdn)
+        self.target_dns_name = f'_octodns-{pool_name}-pool.{record.fqdn}'
 
     @property
     def identifer(self):
-        return '{}-{}-{}'.format(self.index, self.pool_name, self.geo)
+        return f'{self.index}-{self.pool_name}-{self.geo}'
 
     def mod(self, action, existing_rrsets):
         rrset = {
@@ -344,26 +326,23 @@ class _Route53DynamicRule(_Route53Record):
         }
 
     def __hash__(self):
-        return '{}:{}:{}'.format(self.fqdn, self._type,
-                                 self.identifer).__hash__()
+        return f'{self.fqdn}:{self._type}:{self.identifer}'.__hash__()
 
     def __repr__(self):
-        return '_Route53DynamicRule<{} {} {} {} {}>' \
-            .format(self.fqdn, self._type, self.index, self.geo,
-                    self.target_dns_name)
+        return f'_Route53DynamicRule<{self.fqdn} {self._type} {self.index} {self.geo} {self.target_dns_name}>'
 
 
 class _Route53DynamicValue(_Route53Record):
 
     def __init__(self, provider, record, pool_name, value, weight, index,
                  creating):
-        fqdn_override = '_octodns-{}-value.{}'.format(pool_name, record.fqdn)
+        fqdn_override = f'_octodns-{pool_name}-value.{record.fqdn}'
         super(_Route53DynamicValue, self).__init__(provider, record, creating,
                                                    fqdn_override=fqdn_override)
 
         self.pool_name = pool_name
         self.index = index
-        value_convert = getattr(self, '_value_convert_{}'.format(record._type))
+        value_convert = getattr(self, f'_value_convert_{record._type}')
         self.value = value_convert(value, record)
         self.weight = weight
 
@@ -403,12 +382,10 @@ class _Route53DynamicValue(_Route53Record):
         }
 
     def __hash__(self):
-        return '{}:{}:{}'.format(self.fqdn, self._type,
-                                 self.identifer).__hash__()
+        return f'{self.fqdn}:{self._type}:{self.identifer}'.__hash__()
 
     def __repr__(self):
-        return '_Route53DynamicValue<{} {} {} {}>' \
-            .format(self.fqdn, self._type, self.identifer, self.value)
+        return f'_Route53DynamicValue<{self.fqdn} {self._type} {self.identifer} {self.value}>'
 
 
 class _Route53GeoDefault(_Route53Record):
@@ -429,11 +406,10 @@ class _Route53GeoDefault(_Route53Record):
         }
 
     def __hash__(self):
-        return '{}:{}:default'.format(self.fqdn, self._type).__hash__()
+        return f'{self.fqdn}:{self._type}:default'.__hash__()
 
     def __repr__(self):
-        return '_Route53GeoDefault<{} {} {} {}>'.format(self.fqdn, self._type,
-                                                        self.ttl, self.values)
+        return f'_Route53GeoDefault<{self.fqdn} {self._type} {self.ttl} {self.values}>'
 
 
 class _Route53GeoRecord(_Route53Record):
@@ -458,7 +434,7 @@ class _Route53GeoRecord(_Route53Record):
             # potential matches)
             for existing in existing_rrsets:
                 if fqdn == existing.get('Name') and \
-                   set_identifier == existing.get('SetIdentifier', None):
+                       set_identifier == existing.get('SetIdentifier', None):
                     return {
                         'Action': action,
                         'ResourceRecordSet': existing,
@@ -498,18 +474,14 @@ class _Route53GeoRecord(_Route53Record):
         }
 
     def __hash__(self):
-        return '{}:{}:{}'.format(self.fqdn, self._type,
-                                 self.geo.code).__hash__()
+        return f'{self.fqdn}:{self._type}:{self.geo.code}'.__hash__()
 
     def _equality_tuple(self):
         return super(_Route53GeoRecord, self)._equality_tuple() + \
             (self.geo.code,)
 
     def __repr__(self):
-        return '_Route53GeoRecord<{} {} {} {} {}>'.format(self.fqdn,
-                                                          self._type, self.ttl,
-                                                          self.geo.code,
-                                                          self.values)
+        return f'_Route53GeoRecord<{self.fqdn} {self._type} {self.ttl} {self.geo.code} {self.values}>'
 
 
 class Route53ProviderException(Exception):
@@ -549,11 +521,10 @@ def _mod_keyer(mod):
     # Get the unique ID from the name/id to get a consistent ordering.
     if rrset.get('GeoLocation', False):
         unique_id = rrset['SetIdentifier']
+    elif 'SetIdentifier' in rrset:
+        unique_id = f"{rrset['Name']}-{rrset['SetIdentifier']}"
     else:
-        if 'SetIdentifier' in rrset:
-            unique_id = '{}-{}'.format(rrset['Name'], rrset['SetIdentifier'])
-        else:
-            unique_id = rrset['Name']
+        unique_id = rrset['Name']
 
     # Prioritise within the action_priority, ensuring targets come first.
     if rrset.get('GeoLocation', False):
@@ -561,12 +532,7 @@ def _mod_keyer(mod):
         record_priority = 3
     elif rrset.get('AliasTarget', False):
         # We use an alias
-        if rrset.get('Failover', False) == 'SECONDARY':
-            # We're a secondary, which reference the primary (failover, P1).
-            record_priority = 2
-        else:
-            # We're a primary, we reference values (P0).
-            record_priority = 1
+        record_priority = 2 if rrset.get('Failover', False) == 'SECONDARY' else 1
     else:
         # We're just a plain value, has no dependencies so first.
         record_priority = 0
@@ -625,13 +591,13 @@ class Route53Provider(BaseProvider):
                  session_token=None, delegation_set_id=None, *args, **kwargs):
         self.max_changes = max_changes
         self.delegation_set_id = delegation_set_id
-        _msg = 'access_key_id={}, secret_access_key=***, ' \
-               'session_token=***'.format(access_key_id)
+        _msg = f'access_key_id={access_key_id}, secret_access_key=***, session_token=***'
+
         use_fallback_auth = access_key_id is None and \
-            secret_access_key is None and session_token is None
+                secret_access_key is None and session_token is None
         if use_fallback_auth:
             _msg = 'auth=fallback'
-        self.log = logging.getLogger('Route53Provider[{}]'.format(id))
+        self.log = logging.getLogger(f'Route53Provider[{id}]')
         self.log.debug('__init__: id=%s, %s', id, _msg)
         super(Route53Provider, self).__init__(id, *args, **kwargs)
 
@@ -709,9 +675,9 @@ class Route53Provider(BaseProvider):
                 return
             cn = country_alpha2_to_continent_code(cc)
             try:
-                return '{}-{}-{}'.format(cn, cc, loc['SubdivisionCode'])
+                return f"{cn}-{cc}-{loc['SubdivisionCode']}"
             except KeyError:
-                return '{}-{}'.format(cn, cc)
+                return f'{cn}-{cc}'
 
     def _data_for_geo(self, rrset):
         ret = {
@@ -719,8 +685,7 @@ class Route53Provider(BaseProvider):
             'values': [v['Value'] for v in rrset['ResourceRecords']],
             'ttl': int(rrset['TTL'])
         }
-        geo = self._parse_geo(rrset)
-        if geo:
+        if geo := self._parse_geo(rrset):
             ret['geo'] = geo
         return ret
 
@@ -783,7 +748,7 @@ class Route53Provider(BaseProvider):
         values = []
         for rr in rrset['ResourceRecords']:
             order, preference, flags, service, regexp, replacement = \
-                rr['Value'].split()
+                    rr['Value'].split()
             flags = flags[1:-1]
             service = service[1:-1]
             regexp = regexp[1:-1]
@@ -832,7 +797,7 @@ class Route53Provider(BaseProvider):
             start = {}
             while more:
                 resp = \
-                    self._conn.list_resource_record_sets(HostedZoneId=zone_id,
+                        self._conn.list_resource_record_sets(HostedZoneId=zone_id,
                                                          **start)
                 rrsets += resp['ResourceRecordSets']
                 more = resp['IsTruncated']
@@ -843,7 +808,7 @@ class Route53Provider(BaseProvider):
                     }
                     try:
                         start['StartRecordIdentifier'] = \
-                            resp['NextRecordIdentifier']
+                                resp['NextRecordIdentifier']
                     except KeyError:
                         pass
 
@@ -875,13 +840,13 @@ class Route53Provider(BaseProvider):
                 if pool_name == 'default':
                     # default becomes the base for the record and its
                     # value(s) will fill the non-dynamic values
-                    data_for = getattr(self, '_data_for_{}'.format(_type))
-                    data.update(data_for(rrset))
+                    data_for = getattr(self, f'_data_for_{_type}')
+                    data |= data_for(rrset)
                 elif rrset['Failover'] == 'SECONDARY':
                     # This is a failover record, we'll ignore PRIMARY, but
                     # SECONDARY will tell us what the pool's fallback is
                     fallback_name = \
-                        _parse_pool_name(rrset['AliasTarget']['DNSName'])
+                            _parse_pool_name(rrset['AliasTarget']['DNSName'])
                     # Don't care about default fallbacks, anything else
                     # we'll record
                     if fallback_name != 'default':
@@ -895,9 +860,7 @@ class Route53Provider(BaseProvider):
                 target_pool = _parse_pool_name(rrset['AliasTarget']['DNSName'])
                 # Record the pool
                 rules[i]['pool'] = target_pool
-                # Record geo if we have one
-                geo = self._parse_geo(rrset)
-                if geo:
+                if geo := self._parse_geo(rrset):
                     rules[i]['geos'].append(geo)
             else:
                 # These are the pool value(s)
@@ -917,8 +880,7 @@ class Route53Provider(BaseProvider):
             r = {
                 'pool': rule['pool'],
             }
-            geos = sorted(rule['geos'])
-            if geos:
+            if geos := sorted(rule['geos']):
                 r['geos'] = geos
             data['dynamic']['rules'].append(r)
 
@@ -931,8 +893,7 @@ class Route53Provider(BaseProvider):
         before = len(zone.records)
         exists = False
 
-        zone_id = self._get_zone_id(zone.name)
-        if zone_id:
+        if zone_id := self._get_zone_id(zone.name):
             exists = True
             records = defaultdict(lambda: defaultdict(list))
             dynamic = defaultdict(lambda: defaultdict(list))
@@ -959,11 +920,10 @@ class Route53Provider(BaseProvider):
                     else:
                         # Alias records are Route53 specific and are not
                         # portable, so we need to skip them
-                        self.log.warning("%s is an Alias record. Skipping..."
-                                         % rrset['Name'])
+                        self.log.warning(f"{rrset['Name']} is an Alias record. Skipping...")
                     continue
                 # A basic record (potentially including geo)
-                data = getattr(self, '_data_for_{}'.format(record_type))(rrset)
+                data = getattr(self, f'_data_for_{record_type}')(rrset)
                 records[record_name][record_type].append(data)
 
             # Convert the dynamic rrsets to Records
@@ -1085,7 +1045,7 @@ class Route53Provider(BaseProvider):
             ip_address(text_type(value))
             # We're working with an IP, host is the Host header
             healthcheck_host = record.healthcheck_host(value=value)
-        except (AddressValueError, ValueError):
+        except ValueError:
             # This isn't an IP, host is the value, value should be None
             healthcheck_host = value
             value = None
@@ -1098,8 +1058,7 @@ class Route53Provider(BaseProvider):
 
         # we're looking for a healthcheck with the current version & our record
         # type, we'll ignore anything else
-        expected_ref = '{}:{}:{}:'.format(self.HEALTH_CHECK_VERSION,
-                                          record._type, record.fqdn)
+        expected_ref = f'{self.HEALTH_CHECK_VERSION}:{record._type}:{record.fqdn}:'
         for id, health_check in self.health_checks.items():
             if not health_check['CallerReference'].startswith(expected_ref):
                 # not match, ignore
@@ -1136,16 +1095,15 @@ class Route53Provider(BaseProvider):
         if value:
             config['IPAddress'] = value
 
-        ref = '{}:{}:{}:{}'.format(self.HEALTH_CHECK_VERSION, record._type,
-                                   record.fqdn, uuid4().hex[:12])
+        ref = f'{self.HEALTH_CHECK_VERSION}:{record._type}:{record.fqdn}:{uuid4().hex[:12]}'
+
         resp = self._conn.create_health_check(CallerReference=ref,
                                               HealthCheckConfig=config)
         health_check = resp['HealthCheck']
         id = health_check['Id']
 
         # Set a Name for the benefit of the UI
-        name = '{}:{} - {}'.format(record.fqdn, record._type,
-                                   value or healthcheck_host)
+        name = f'{record.fqdn}:{record._type} - {value or healthcheck_host}'
         self._conn.change_tags_for_resource(ResourceType='healthcheck',
                                             ResourceId=id,
                                             AddTags=[{
@@ -1175,19 +1133,17 @@ class Route53Provider(BaseProvider):
         # Find the health checks we're using for the new route53 records
         in_use = set()
         for r in new:
-            hc_id = getattr(r, 'health_check_id', False)
-            if hc_id:
+            if hc_id := getattr(r, 'health_check_id', False):
                 in_use.add(hc_id)
         self.log.debug('_gc_health_checks:   in_use=%s', in_use)
         # Now we need to run through ALL the health checks looking for those
         # that apply to this record, deleting any that do and are no longer in
         # use
-        expected_re = re.compile(r'^\d\d\d\d:{}:{}:'
-                                 .format(record._type, record.fqdn))
+        expected_re = re.compile(f'^\d\d\d\d:{record._type}:{record.fqdn}:')
         # UNITL 1.0: we'll clean out the previous version of Route53 health
         # checks as best as we can.
         expected_legacy_host = record.fqdn[:-1]
-        expected_legacy = '0000:{}:'.format(record._type)
+        expected_legacy = f'0000:{record._type}:'
         for id, health_check in self.health_checks.items():
             ref = health_check['CallerReference']
             if expected_re.match(ref) and id not in in_use:
@@ -1234,14 +1190,15 @@ class Route53Provider(BaseProvider):
         # We can't use set math here b/c we won't be able to control which of
         # the two objects will be in the result and we need to ensure it's the
         # new one.
-        upserts = set()
-        for new_record in new_records:
-            if new_record in existing_records:
-                upserts.add(new_record)
+        upserts = {
+            new_record
+            for new_record in new_records
+            if new_record in existing_records
+        }
 
         return self._gen_mods('DELETE', deletes, existing_rrsets) + \
-            self._gen_mods('CREATE', creates, existing_rrsets) + \
-            self._gen_mods('UPSERT', upserts, existing_rrsets)
+                self._gen_mods('CREATE', creates, existing_rrsets) + \
+                self._gen_mods('UPSERT', upserts, existing_rrsets)
 
     def _mod_Delete(self, change, zone_id, existing_rrsets):
         # Existing is the thing that needs to be deleted
@@ -1269,16 +1226,19 @@ class Route53Provider(BaseProvider):
             health_check_id = rrset['HealthCheckId']
             health_check = self.health_checks[health_check_id]
             caller_ref = health_check['CallerReference']
-            if caller_ref.startswith(self.HEALTH_CHECK_VERSION):
-                if self._health_check_equivalent(healthcheck_host,
-                                                 healthcheck_path,
-                                                 healthcheck_protocol,
-                                                 healthcheck_port,
-                                                 healthcheck_latency,
-                                                 healthcheck_interval,
-                                                 health_check):
-                    # it has the right health check
-                    return False
+            if caller_ref.startswith(
+                self.HEALTH_CHECK_VERSION
+            ) and self._health_check_equivalent(
+                healthcheck_host,
+                healthcheck_path,
+                healthcheck_protocol,
+                healthcheck_port,
+                healthcheck_latency,
+                healthcheck_interval,
+                health_check,
+            ):
+                # it has the right health check
+                return False
         except (IndexError, KeyError):
             # no health check id or one that isn't the right version
             pass
@@ -1354,7 +1314,7 @@ class Route53Provider(BaseProvider):
             # zone doesn't exist so no extras to worry about
             return []
         # we'll skip extra checking for anything we're already going to change
-        changed = set([c.record for c in changes])
+        changed = {c.record for c in changes}
         # ok, now it's time for the reason we're here, we need to go over all
         # the desired records
         extras = []
@@ -1363,13 +1323,14 @@ class Route53Provider(BaseProvider):
                 # already have a change for it, skipping
                 continue
 
-            if getattr(record, 'geo', False):
-                if self._extra_changes_geo_needs_update(zone_id, record):
-                    extras.append(Update(record, record))
-            elif getattr(record, 'dynamic', False):
-                if self._extra_changes_dynamic_needs_update(zone_id, record):
-                    extras.append(Update(record, record))
-
+            if (
+                getattr(record, 'geo', False)
+                and self._extra_changes_geo_needs_update(zone_id, record)
+                or not getattr(record, 'geo', False)
+                and getattr(record, 'dynamic', False)
+                and self._extra_changes_dynamic_needs_update(zone_id, record)
+            ):
+                extras.append(Update(record, record))
         return extras
 
     def _apply(self, plan):
@@ -1384,7 +1345,7 @@ class Route53Provider(BaseProvider):
         existing_rrsets = self._load_records(zone_id)
         for c in changes:
             # Generate the mods for this change
-            mod_type = getattr(self, '_mod_{}'.format(c.__class__.__name__))
+            mod_type = getattr(self, f'_mod_{c.__class__.__name__}')
             mods = mod_type(c, zone_id, existing_rrsets)
 
             # Order our mods to make sure targets exist before alises point to
@@ -1392,14 +1353,14 @@ class Route53Provider(BaseProvider):
             mods.sort(key=_mod_keyer)
 
             mods_rs_count = sum(
-                [len(m['ResourceRecordSet'].get('ResourceRecords', ''))
-                 for m in mods]
+                len(m['ResourceRecordSet'].get('ResourceRecords', ''))
+                for m in mods
             )
+
 
             if mods_rs_count > self.max_changes:
                 # a single mod resulted in too many ResourceRecords changes
-                raise Exception('Too many modifications: {}'
-                                .format(mods_rs_count))
+                raise Exception(f'Too many modifications: {mods_rs_count}')
 
             # r53 limits changesets to 1000 entries
             if (batch_rs_count + mods_rs_count) < self.max_changes:
@@ -1429,10 +1390,7 @@ class Route53Provider(BaseProvider):
         # Ensure this batch is ordered (deletes before creates etc.)
         batch.sort(key=_mod_keyer)
         uuid = uuid4().hex
-        batch = {
-            'Comment': 'Change: {}'.format(uuid),
-            'Changes': batch,
-        }
+        batch = {'Comment': f'Change: {uuid}', 'Changes': batch}
         self.log.debug('_really_apply:   sending change request, comment=%s',
                        batch['Comment'])
         resp = self._conn.change_resource_record_sets(

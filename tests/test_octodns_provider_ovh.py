@@ -381,22 +381,42 @@ class TestOvhProvider(TestCase):
         with patch.object(provider._client, 'get') as get_mock:
             get_returns = [
                 [1, 2, 3, 4],
-                {'fieldType': 'A', 'ttl': 600, 'target': '5.6.7.8',
-                 'subDomain': '', 'id': 100},
-                {'fieldType': 'A', 'ttl': 600, 'target': '5.6.7.8',
-                 'subDomain': 'fake', 'id': 101},
-                {'fieldType': 'TXT', 'ttl': 600, 'target': 'fake txt record',
-                 'subDomain': 'txt', 'id': 102},
-                {'fieldType': 'DKIM', 'ttl': 600,
-                 'target': 'v=DKIM1; %s' % self.valid_dkim_key,
-                 'subDomain': 'dkim', 'id': 103}
+                {
+                    'fieldType': 'A',
+                    'ttl': 600,
+                    'target': '5.6.7.8',
+                    'subDomain': '',
+                    'id': 100,
+                },
+                {
+                    'fieldType': 'A',
+                    'ttl': 600,
+                    'target': '5.6.7.8',
+                    'subDomain': 'fake',
+                    'id': 101,
+                },
+                {
+                    'fieldType': 'TXT',
+                    'ttl': 600,
+                    'target': 'fake txt record',
+                    'subDomain': 'txt',
+                    'id': 102,
+                },
+                {
+                    'fieldType': 'DKIM',
+                    'ttl': 600,
+                    'target': f'v=DKIM1; {self.valid_dkim_key}',
+                    'subDomain': 'dkim',
+                    'id': 103,
+                },
             ]
+
             get_mock.side_effect = get_returns
 
             plan = provider.plan(desired)
 
             with patch.object(provider._client, 'post') as post_mock, \
-                    patch.object(provider._client, 'delete') as delete_mock:
+                        patch.object(provider._client, 'delete') as delete_mock:
                 get_mock.side_effect = [[100], [101], [102], [103]]
                 provider.apply(plan)
                 wanted_calls = [

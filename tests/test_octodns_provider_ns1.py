@@ -1398,59 +1398,67 @@ class TestNs1ProviderDynamic(TestCase):
         filters = provider._get_updated_filter_chain(True, True)
         catchall_pool_name = 'iad__catchall'
         ns1_record = {
-            'answers': [{
-                'answer': ['3.4.5.6'],
-                'meta': {
-                    'priority': 1,
-                    'note': 'from:lhr__country',
+            'answers': [
+                {
+                    'answer': ['3.4.5.6'],
+                    'meta': {
+                        'priority': 1,
+                        'note': 'from:lhr__country',
+                    },
+                    'region': 'lhr',
                 },
-                'region': 'lhr',
-            }, {
-                'answer': ['2.3.4.5'],
-                'meta': {
-                    'priority': 2,
-                    'weight': 12,
-                    'note': 'from:iad',
+                {
+                    'answer': ['2.3.4.5'],
+                    'meta': {
+                        'priority': 2,
+                        'weight': 12,
+                        'note': 'from:iad',
+                    },
+                    'region': 'lhr',
                 },
-                'region': 'lhr',
-            }, {
-                'answer': ['1.2.3.4'],
-                'meta': {
-                    'priority': 3,
-                    'note': 'from:--default--',
+                {
+                    'answer': ['1.2.3.4'],
+                    'meta': {
+                        'priority': 3,
+                        'note': 'from:--default--',
+                    },
+                    'region': 'lhr',
                 },
-                'region': 'lhr',
-            }, {
-                'answer': ['2.3.4.5'],
-                'meta': {
-                    'priority': 1,
-                    'weight': 12,
-                    'note': 'from:iad',
+                {
+                    'answer': ['2.3.4.5'],
+                    'meta': {
+                        'priority': 1,
+                        'weight': 12,
+                        'note': 'from:iad',
+                    },
+                    'region': 'iad',
                 },
-                'region': 'iad',
-            }, {
-                'answer': ['1.2.3.4'],
-                'meta': {
-                    'priority': 2,
-                    'note': 'from:--default--',
+                {
+                    'answer': ['1.2.3.4'],
+                    'meta': {
+                        'priority': 2,
+                        'note': 'from:--default--',
+                    },
+                    'region': 'iad',
                 },
-                'region': 'iad',
-            }, {
-                'answer': ['2.3.4.5'],
-                'meta': {
-                    'priority': 1,
-                    'weight': 12,
-                    'note': 'from:{}'.format(catchall_pool_name),
+                {
+                    'answer': ['2.3.4.5'],
+                    'meta': {
+                        'priority': 1,
+                        'weight': 12,
+                        'note': f'from:{catchall_pool_name}',
+                    },
+                    'region': catchall_pool_name,
                 },
-                'region': catchall_pool_name,
-            }, {
-                'answer': ['1.2.3.4'],
-                'meta': {
-                    'priority': 2,
-                    'note': 'from:--default--',
+                {
+                    'answer': ['1.2.3.4'],
+                    'meta': {
+                        'priority': 2,
+                        'note': 'from:--default--',
+                    },
+                    'region': catchall_pool_name,
                 },
-                'region': catchall_pool_name,
-            }],
+            ],
             'domain': 'unit.tests',
             'filters': filters,
             'regions': {
@@ -1482,11 +1490,12 @@ class TestNs1ProviderDynamic(TestCase):
                     'meta': {
                         'note': 'rule-order:3',
                     },
-                }
+                },
             },
             'tier': 3,
             'ttl': 42,
         }
+
         data = provider._data_for_dynamic('A', ns1_record)
         self.assertEquals({
             'dynamic': {
@@ -1540,7 +1549,7 @@ class TestNs1ProviderDynamic(TestCase):
         ns1_record['answers'][-2]['region'] = old_style_catchall_pool_name
         ns1_record['answers'][-1]['region'] = old_style_catchall_pool_name
         ns1_record['regions'][old_style_catchall_pool_name] = \
-            ns1_record['regions'][catchall_pool_name]
+                ns1_record['regions'][catchall_pool_name]
         del ns1_record['regions'][catchall_pool_name]
         data3 = provider._data_for_dynamic('A', ns1_record)
         self.assertEquals(data, data2)
@@ -1549,36 +1558,34 @@ class TestNs1ProviderDynamic(TestCase):
         # 1. Full list of countries should return 'OC' in geos
         oc_countries = Ns1Provider._CONTINENT_TO_LIST_OF_COUNTRIES['OC']
         ns1_record['regions']['lhr__country']['meta']['country'] = \
-            list(oc_countries)
+                list(oc_countries)
         data3 = provider._data_for_A('A', ns1_record)
         self.assertTrue('OC' in data3['dynamic']['rules'][0]['geos'])
 
         # 2. Partial list of countries should return just those
         partial_oc_cntry_list = list(oc_countries)[:5]
         ns1_record['regions']['lhr__country']['meta']['country'] = \
-            partial_oc_cntry_list
+                partial_oc_cntry_list
         data4 = provider._data_for_A('A', ns1_record)
         for c in partial_oc_cntry_list:
-            self.assertTrue(
-                'OC-{}'.format(c) in data4['dynamic']['rules'][0]['geos'])
+            self.assertTrue(f'OC-{c}' in data4['dynamic']['rules'][0]['geos'])
 
         # NA test cases
         # 1. Full list of countries should return 'NA' in geos
         na_countries = Ns1Provider._CONTINENT_TO_LIST_OF_COUNTRIES['NA']
         del ns1_record['regions']['lhr__country']['meta']['us_state']
         ns1_record['regions']['lhr__country']['meta']['country'] = \
-            list(na_countries)
+                list(na_countries)
         data5 = provider._data_for_A('A', ns1_record)
         self.assertTrue('NA' in data5['dynamic']['rules'][0]['geos'])
 
         # 2. Partial list of countries should return just those
         partial_na_cntry_list = list(na_countries)[:5] + ['SX', 'UM']
         ns1_record['regions']['lhr__country']['meta']['country'] = \
-            partial_na_cntry_list
+                partial_na_cntry_list
         data6 = provider._data_for_A('A', ns1_record)
         for c in partial_na_cntry_list:
-            self.assertTrue(
-                'NA-{}'.format(c) in data6['dynamic']['rules'][0]['geos'])
+            self.assertTrue(f'NA-{c}' in data6['dynamic']['rules'][0]['geos'])
 
         # Test out fallback only pools and new-style notes
         ns1_record = {
@@ -1699,22 +1706,25 @@ class TestNs1ProviderDynamic(TestCase):
         filters = provider._get_updated_filter_chain(False, False)
         catchall_pool_name = 'iad__catchall'
         ns1_record = {
-            'answers': [{
-                'answer': ['iad.unit.tests.'],
-                'meta': {
-                    'priority': 1,
-                    'weight': 12,
-                    'note': 'from:{}'.format(catchall_pool_name),
+            'answers': [
+                {
+                    'answer': ['iad.unit.tests.'],
+                    'meta': {
+                        'priority': 1,
+                        'weight': 12,
+                        'note': f'from:{catchall_pool_name}',
+                    },
+                    'region': catchall_pool_name,
                 },
-                'region': catchall_pool_name,
-            }, {
-                'answer': ['value.unit.tests.'],
-                'meta': {
-                    'priority': 2,
-                    'note': 'from:--default--',
+                {
+                    'answer': ['value.unit.tests.'],
+                    'meta': {
+                        'priority': 2,
+                        'note': 'from:--default--',
+                    },
+                    'region': catchall_pool_name,
                 },
-                'region': catchall_pool_name,
-            }],
+            ],
             'domain': 'foo.unit.tests',
             'filters': filters,
             'regions': {
@@ -1728,6 +1738,7 @@ class TestNs1ProviderDynamic(TestCase):
             'ttl': 43,
             'type': 'CNAME',
         }
+
         data = provider._data_for_CNAME('CNAME', ns1_record)
         self.assertEquals({
             'dynamic': {
@@ -2276,7 +2287,7 @@ class TestNs1Client(TestCase):
         self.assertEquals(monitor, client.monitors_update('new-id',
                                                           key='changed-value'))
         monitors_update_mock \
-            .assert_has_calls([call('new-id', {}, key='changed-value')])
+                .assert_has_calls([call('new-id', {}, key='changed-value')])
         new_expected['new-id'] = monitor
         self.assertEquals(new_expected, client.monitors)
 

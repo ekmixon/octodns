@@ -45,7 +45,7 @@ class OvhProvider(BaseProvider):
 
     def __init__(self, id, endpoint, application_key, application_secret,
                  consumer_key, *args, **kwargs):
-        self.log = logging.getLogger('OvhProvider[{}]'.format(id))
+        self.log = logging.getLogger(f'OvhProvider[{id}]')
         self.log.debug('__init__: id=%s, endpoint=%s, application_key=%s, '
                        'application_secret=***, consumer_key=%s', id, endpoint,
                        application_key, consumer_key)
@@ -81,7 +81,7 @@ class OvhProvider(BaseProvider):
                     self.log.warning('Not managed record of type %s, skip',
                                      _type)
                     continue
-                data_for = getattr(self, '_data_for_{}'.format(_type))
+                data_for = getattr(self, f'_data_for_{_type}')
                 record = Record.new(zone, name, data_for(_type, records),
                                     source=self, lenient=lenient)
                 zone.add_record(record, lenient=lenient)
@@ -98,15 +98,14 @@ class OvhProvider(BaseProvider):
                       len(changes))
         for change in changes:
             class_name = change.__class__.__name__
-            getattr(self, '_apply_{}'.format(class_name).lower())(zone_name,
-                                                                  change)
+            getattr(self, f'_apply_{class_name}'.lower())(zone_name, change)
 
         # We need to refresh the zone to really apply the changes
-        self._client.post('/domain/zone/{}/refresh'.format(zone_name))
+        self._client.post(f'/domain/zone/{zone_name}/refresh')
 
     def _apply_create(self, zone_name, change):
         new = change.new
-        params_for = getattr(self, '_params_for_{}'.format(new._type))
+        params_for = getattr(self, f'_params_for_{new._type}')
         for params in params_for(new):
             self.create_record(zone_name, params)
 
@@ -117,9 +116,8 @@ class OvhProvider(BaseProvider):
     def _apply_delete(self, zone_name, change):
         existing = change.existing
         record_type = existing._type
-        if record_type == "TXT":
-            if self._is_valid_dkim(existing.values[0]):
-                record_type = 'DKIM'
+        if record_type == "TXT" and self._is_valid_dkim(existing.values[0]):
+            record_type = 'DKIM'
         self.delete_records(zone_name, record_type, existing.name)
 
     @staticmethod
@@ -195,12 +193,15 @@ class OvhProvider(BaseProvider):
         values = []
         for record in records:
             priority, weight, port, target = record['target'].split(' ', 3)
-            values.append({
-                'port': port,
-                'priority': priority,
-                'target': '{}.'.format(target),
-                'weight': weight
-            })
+            values.append(
+                {
+                    'port': port,
+                    'priority': priority,
+                    'target': f'{target}.',
+                    'weight': weight,
+                }
+            )
+
         return {
             'type': _type,
             'ttl': records[0]['ttl'],
@@ -264,11 +265,10 @@ class OvhProvider(BaseProvider):
     def _params_for_CAA(record):
         for value in record.values:
             yield {
-                'target': '{} {} "{}"'.format(value.flags, value.tag,
-                                              value.value),
+                'target': f'{value.flags} {value.tag} "{value.value}"',
                 'subDomain': record.name,
                 'ttl': record.ttl,
-                'fieldType': record._type
+                'fieldType': record._type,
             }
 
     @staticmethod
@@ -284,9 +284,8 @@ class OvhProvider(BaseProvider):
     @staticmethod
     def _params_for_NAPTR(record):
         for value in record.values:
-            content = '{} {} "{}" "{}" "{}" {}' \
-                .format(value.order, value.preference, value.flags,
-                        value.service, value.regexp, value.replacement)
+            content = f'{value.order} {value.preference} "{value.flags}" "{value.service}" "{value.regexp}" {value.replacement}'
+
             yield {
                 'target': content,
                 'subDomain': record.name,
@@ -298,25 +297,20 @@ class OvhProvider(BaseProvider):
     def _params_for_SRV(record):
         for value in record.values:
             yield {
-                'target': '{} {} {} {}'.format(value.priority,
-                                               value.weight,
-                                               value.port,
-                                               value.target),
+                'target': f'{value.priority} {value.weight} {value.port} {value.target}',
                 'subDomain': record.name,
                 'ttl': record.ttl,
-                'fieldType': record._type
+                'fieldType': record._type,
             }
 
     @staticmethod
     def _params_for_SSHFP(record):
         for value in record.values:
             yield {
-                'target': '{} {} {}'.format(value.algorithm,
-                                            value.fingerprint_type,
-                                            value.fingerprint),
+                'target': f'{value.algorithm} {value.fingerprint_type} {value.fingerprint}',
                 'subDomain': record.name,
                 'ttl': record.ttl,
-                'fieldType': record._type
+                'fieldType': record._type,
             }
 
     def _params_for_TXT(self, record):
@@ -386,7 +380,7 @@ class OvhProvider(BaseProvider):
         :param zone_name: Name of zone
         :return: list of id's records
         """
-        records = self._client.get('/domain/zone/{}/record'.format(zone_name))
+        records = self._client.get(f'/domain/zone/{zone_name}/record')
         return [self.get_record(zone_name, record_id) for record_id in records]
 
     def get_record(self, zone_name, record_id):
@@ -396,8 +390,7 @@ class OvhProvider(BaseProvider):
         :param record_id: Id of the record
         :return: Value of the record
         """
-        return self._client.get(
-            '/domain/zone/{}/record/{}'.format(zone_name, record_id))
+        return self._client.get(f'/domain/zone/{zone_name}/record/{record_id}')
 
     def delete_records(self, zone_name, record_type, subdomain):
         """
@@ -406,8 +399,12 @@ class OvhProvider(BaseProvider):
         :param record_type: fieldType
         :param subdomain: subDomain
         """
-        records = self._client.get('/domain/zone/{}/record'.format(zone_name),
-                                   fieldType=record_type, subDomain=subdomain)
+        records = self._client.get(
+            f'/domain/zone/{zone_name}/record',
+            fieldType=record_type,
+            subDomain=subdomain,
+        )
+
         for record in records:
             self.delete_record(zone_name, record)
 
@@ -419,8 +416,7 @@ class OvhProvider(BaseProvider):
         """
         self.log.debug('Delete record: zone: %s, id %s', zone_name,
                        record_id)
-        self._client.delete(
-            '/domain/zone/{}/record/{}'.format(zone_name, record_id))
+        self._client.delete(f'/domain/zone/{zone_name}/record/{record_id}')
 
     def create_record(self, zone_name, params):
         """
@@ -431,5 +427,4 @@ class OvhProvider(BaseProvider):
         """
         self.log.debug('Create record: zone: %s, id %s', zone_name,
                        params)
-        return self._client.post('/domain/zone/{}/record'.format(zone_name),
-                                 **params)
+        return self._client.post(f'/domain/zone/{zone_name}/record', **params)

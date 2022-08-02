@@ -70,7 +70,7 @@ class ConstellixClient(object):
             'x-cnsdns-requestDate': now
         }
 
-        url = '{}{}'.format(self.BASE, path)
+        url = f'{self.BASE}{path}'
         resp = self._sess.request(method, url, headers=headers,
                                   params=params, json=data)
         if resp.status_code == 400:
@@ -91,7 +91,7 @@ class ConstellixClient(object):
             resp = self._request('GET', '').json()
             zones += resp
 
-            self._domains = {'{}.'.format(z['name']): z['id'] for z in zones}
+            self._domains = {f"{z['name']}.": z['id'] for z in zones}
 
         return self._domains
 
@@ -99,19 +99,19 @@ class ConstellixClient(object):
         zone_id = self.domains.get(name, False)
         if not zone_id:
             raise ConstellixClientNotFound()
-        path = '/{}'.format(zone_id)
+        path = f'/{zone_id}'
         return self._request('GET', path).json()
 
     def domain_create(self, name):
         resp = self._request('POST', '/', data={'names': [name]})
         # Add newly created zone to domain cache
-        self._domains['{}.'.format(name)] = resp.json()[0]['id']
+        self._domains[f'{name}.'] = resp.json()[0]['id']
 
     def _absolutize_value(self, value, zone_name):
         if value == '':
             value = zone_name
         elif not value.endswith('.'):
-            value = '{}.{}'.format(value, zone_name)
+            value = f'{value}.{zone_name}'
 
         return value
 
@@ -119,7 +119,7 @@ class ConstellixClient(object):
         zone_id = self.domains.get(zone_name, False)
         if not zone_id:
             raise ConstellixClientNotFound()
-        path = '/{}/records'.format(zone_id)
+        path = f'/{zone_id}/records'
 
         resp = self._request('GET', path).json()
         for record in resp:
@@ -151,7 +151,7 @@ class ConstellixClient(object):
             record_type = 'ANAME'
 
         zone_id = self.domains.get(zone_name, False)
-        path = '/{}/records/{}'.format(zone_id, record_type)
+        path = f'/{zone_id}/records/{record_type}'
 
         self._request('POST', path, data=params)
 
@@ -161,7 +161,7 @@ class ConstellixClient(object):
             record_type = 'ANAME'
 
         zone_id = self.domains.get(zone_name, False)
-        path = '/{}/records/{}/{}'.format(zone_id, record_type, record_id)
+        path = f'/{zone_id}/records/{record_type}/{record_id}'
         self._request('DELETE', path)
 
 
@@ -186,7 +186,7 @@ class ConstellixProvider(BaseProvider):
 
     def __init__(self, id, api_key, secret_key, ratelimit_delay=0.0,
                  *args, **kwargs):
-        self.log = logging.getLogger('ConstellixProvider[{}]'.format(id))
+        self.log = logging.getLogger(f'ConstellixProvider[{id}]')
         self.log.debug('__init__: id=%s, api_key=***, secret_key=***', id)
         super(ConstellixProvider, self).__init__(id, *args, **kwargs)
         self._client = ConstellixClient(api_key, secret_key, ratelimit_delay)
@@ -204,19 +204,13 @@ class ConstellixProvider(BaseProvider):
     _data_for_AAAA = _data_for_multiple
 
     def _data_for_CAA(self, _type, records):
-        values = []
         record = records[0]
-        for value in record['value']:
-            values.append({
-                'flags': value['flag'],
-                'tag': value['tag'],
-                'value': value['data']
-            })
-        return {
-            'ttl': records[0]['ttl'],
-            'type': _type,
-            'values': values
-        }
+        values = [
+            {'flags': value['flag'], 'tag': value['tag'], 'value': value['data']}
+            for value in record['value']
+        ]
+
+        return {'ttl': record['ttl'], 'type': _type, 'values': values}
 
     def _data_for_NS(self, _type, records):
         record = records[0]
@@ -248,18 +242,13 @@ class ConstellixProvider(BaseProvider):
     _data_for_SPF = _data_for_TXT
 
     def _data_for_MX(self, _type, records):
-        values = []
         record = records[0]
-        for value in record['value']:
-            values.append({
-                'preference': value['level'],
-                'exchange': value['value']
-            })
-        return {
-            'ttl': records[0]['ttl'],
-            'type': _type,
-            'values': values
-        }
+        values = [
+            {'preference': value['level'], 'exchange': value['value']}
+            for value in record['value']
+        ]
+
+        return {'ttl': record['ttl'], 'type': _type, 'values': values}
 
     def _data_for_single(self, _type, records):
         record = records[0]
@@ -272,20 +261,18 @@ class ConstellixProvider(BaseProvider):
     _data_for_CNAME = _data_for_single
 
     def _data_for_SRV(self, _type, records):
-        values = []
         record = records[0]
-        for value in record['value']:
-            values.append({
+        values = [
+            {
                 'port': value['port'],
                 'priority': value['priority'],
                 'target': value['value'],
-                'weight': value['weight']
-            })
-        return {
-            'type': _type,
-            'ttl': records[0]['ttl'],
-            'values': values
-        }
+                'weight': value['weight'],
+            }
+            for value in record['value']
+        ]
+
+        return {'type': _type, 'ttl': record['ttl'], 'values': values}
 
     def zone_records(self, zone):
         if zone.name not in self._zone_records:
@@ -313,7 +300,7 @@ class ConstellixProvider(BaseProvider):
         before = len(zone.records)
         for name, types in values.items():
             for _type, records in types.items():
-                data_for = getattr(self, '_data_for_{}'.format(_type))
+                data_for = getattr(self, f'_data_for_{_type}')
                 record = Record.new(zone, name, data_for(_type, records),
                                     source=self, lenient=lenient)
                 zone.add_record(record, lenient=lenient)
@@ -376,14 +363,16 @@ class ConstellixProvider(BaseProvider):
         }
 
     def _params_for_SRV(self, record):
-        values = []
-        for value in record.values:
-            values.append({
+        values = [
+            {
                 'value': value.target,
                 'priority': value.priority,
                 'weight': value.weight,
-                'port': value.port
-            })
+                'port': value.port,
+            }
+            for value in record.values
+        ]
+
         for value in record.values:
             yield {
                 'name': record.name,
@@ -393,11 +382,10 @@ class ConstellixProvider(BaseProvider):
 
     def _params_for_TXT(self, record):
         # Constellix does not want values escaped
-        values = []
-        for value in record.chunked_values:
-            values.append({
-                'value': value.replace('\\;', ';')
-            })
+        values = [
+            {'value': value.replace('\\;', ';')} for value in record.chunked_values
+        ]
+
         yield {
             'name': record.name,
             'ttl': record.ttl,
@@ -407,13 +395,15 @@ class ConstellixProvider(BaseProvider):
     _params_for_SPF = _params_for_TXT
 
     def _params_for_CAA(self, record):
-        values = []
-        for value in record.values:
-            values.append({
+        values = [
+            {
                 'tag': value.tag,
                 'data': value.value,
                 'flag': value.flags,
-            })
+            }
+            for value in record.values
+        ]
+
         yield {
             'name': record.name,
             'ttl': record.ttl,
@@ -422,7 +412,7 @@ class ConstellixProvider(BaseProvider):
 
     def _apply_Create(self, change):
         new = change.new
-        params_for = getattr(self, '_params_for_{}'.format(new._type))
+        params_for = getattr(self, f'_params_for_{new._type}')
         for params in params_for(new):
             self._client.record_create(new.zone.name, new._type, params)
 
@@ -453,7 +443,7 @@ class ConstellixProvider(BaseProvider):
 
         for change in changes:
             class_name = change.__class__.__name__
-            getattr(self, '_apply_{}'.format(class_name))(change)
+            getattr(self, f'_apply_{class_name}')(change)
 
         # Clear out the cache if any
         self._zone_records.pop(desired.name, None)

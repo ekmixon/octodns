@@ -77,11 +77,11 @@ class TestDnsimpleProvider(TestCase):
         # No diffs == no changes
         with requests_mock() as mock:
             base = 'https://api.dnsimple.com/v2/42/zones/unit.tests/' \
-                'records?page='
+                    'records?page='
             with open('tests/fixtures/dnsimple-page-1.json') as fh:
-                mock.get('{}{}'.format(base, 1), text=fh.read())
+                mock.get(f'{base}1', text=fh.read())
             with open('tests/fixtures/dnsimple-page-2.json') as fh:
-                mock.get('{}{}'.format(base, 2), text=fh.read())
+                mock.get(f'{base}2', text=fh.read())
 
             zone = Zone('unit.tests.', [])
             provider.populate(zone)
@@ -104,23 +104,29 @@ class TestDnsimpleProvider(TestCase):
 
             zone = Zone('unit.tests.', [])
             provider.populate(zone, lenient=True)
-            self.assertEquals(set([
-                Record.new(zone, '', {
-                    'ttl': 3600,
-                    'type': 'SSHFP',
-                    'values': []
-                }, lenient=True),
-                Record.new(zone, '_srv._tcp', {
-                    'ttl': 600,
-                    'type': 'SRV',
-                    'values': []
-                }, lenient=True),
-                Record.new(zone, 'naptr', {
-                    'ttl': 600,
-                    'type': 'NAPTR',
-                    'values': []
-                }, lenient=True),
-            ]), zone.records)
+            self.assertEquals(
+                {
+                    Record.new(
+                        zone,
+                        '',
+                        {'ttl': 3600, 'type': 'SSHFP', 'values': []},
+                        lenient=True,
+                    ),
+                    Record.new(
+                        zone,
+                        '_srv._tcp',
+                        {'ttl': 600, 'type': 'SRV', 'values': []},
+                        lenient=True,
+                    ),
+                    Record.new(
+                        zone,
+                        'naptr',
+                        {'ttl': 600, 'type': 'NAPTR', 'values': []},
+                        lenient=True,
+                    ),
+                },
+                zone.records,
+            )
 
     def test_apply(self):
         provider = DnsimpleProvider('test', 'token', 42)

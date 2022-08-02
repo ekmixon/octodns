@@ -15,11 +15,12 @@ from unittest import TestCase
 from mock import Mock, patch, PropertyMock
 
 zone = Zone(name='unit.tests.', sub_zones=[])
-octo_records = []
-octo_records.append(Record.new(zone, '', {
-    'ttl': 0,
-    'type': 'A',
-    'values': ['1.2.3.4', '10.10.10.10']}))
+octo_records = [
+    Record.new(
+        zone, '', {'ttl': 0, 'type': 'A', 'values': ['1.2.3.4', '10.10.10.10']}
+    )
+]
+
 octo_records.append(Record.new(zone, 'a', {
     'ttl': 1,
     'type': 'A',
@@ -204,7 +205,7 @@ class DummyIterator:
 
 class TestGoogleCloudProvider(TestCase):
     @patch('octodns.provider.googlecloud.dns')
-    def _get_provider(*args):
+    def _get_provider(self):
         '''Returns a mock GoogleCloudProvider object to use in testing.
 
             :type return: GoogleCloudProvider
@@ -224,6 +225,7 @@ class TestGoogleCloudProvider(TestCase):
     @patch('octodns.provider.googlecloud.time.sleep')
     @patch('octodns.provider.googlecloud.dns')
     def test__apply(self, *_):
+
         class DummyDesired:
             def __init__(self, name, changes):
                 self.name = name
@@ -261,9 +263,13 @@ class TestGoogleCloudProvider(TestCase):
         desired = Mock()
         desired.name = "unit.tests."
         changes = []
-        changes.append(Create(create_r))
-        changes.append(Delete(delete_r))
-        changes.append(Update(existing=update_existing_r, new=update_new_r))
+        changes.extend(
+            (
+                Create(create_r),
+                Delete(delete_r),
+                Update(existing=update_existing_r, new=update_new_r),
+            )
+        )
 
         provider.apply(Plan(
             existing=[update_existing_r, delete_r],
@@ -273,9 +279,9 @@ class TestGoogleCloudProvider(TestCase):
         ))
 
         calls_mock = gcloud_zone_mock.changes.return_value
-        mocked_calls = []
-        for mock_call in calls_mock.add_record_set.mock_calls:
-            mocked_calls.append(mock_call[1][0])
+        mocked_calls = [
+            mock_call[1][0] for mock_call in calls_mock.add_record_set.mock_calls
+        ]
 
         self.assertEqual(mocked_calls, [
             DummyResourceRecordSet(
@@ -284,9 +290,10 @@ class TestGoogleCloudProvider(TestCase):
                 'aa.unit.tests.', 'A', 666, ['1.4.3.2'])
         ])
 
-        mocked_calls2 = []
-        for mock_call in calls_mock.delete_record_set.mock_calls:
-            mocked_calls2.append(mock_call[1][0])
+        mocked_calls2 = [
+            mock_call[1][0]
+            for mock_call in calls_mock.delete_record_set.mock_calls
+        ]
 
         self.assertEqual(mocked_calls2, [
             DummyResourceRecordSet(
@@ -418,8 +425,7 @@ class TestGoogleCloudProvider(TestCase):
         provider = self._get_provider()
         dummy_gcloud_zone = DummyGoogleCloudZone("unit.tests")
         for octo_record in octo_records:
-            _rrset_func = getattr(
-                provider, '_rrset_for_{}'.format(octo_record._type))
+            _rrset_func = getattr(provider, f'_rrset_for_{octo_record._type}')
             self.assertEqual(
                 _rrset_func(dummy_gcloud_zone, octo_record).record_type,
                 octo_record._type

@@ -68,10 +68,9 @@ class BaseProvider(BaseSource):
         if before != after:
             self.log.info('plan:   filtered out %s changes', before - after)
 
-        # allow the provider to add extra changes it needs
-        extra = self._extra_changes(existing=existing, desired=desired,
-                                    changes=changes)
-        if extra:
+        if extra := self._extra_changes(
+            existing=existing, desired=desired, changes=changes
+        ):
             self.log.info('plan:   extra changes\n  %s', '\n  '
                           .join([text_type(c) for c in extra]))
             changes += extra

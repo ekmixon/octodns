@@ -13,7 +13,8 @@ class EnvVarSourceException(Exception):
 class EnvironmentVariableNotFoundException(EnvVarSourceException):
     def __init__(self, data):
         super(EnvironmentVariableNotFoundException, self).__init__(
-            'Unknown environment variable {}'.format(data))
+            f'Unknown environment variable {data}'
+        )
 
 
 class EnvVarSource(BaseSource):
@@ -63,8 +64,7 @@ class EnvVarSource(BaseSource):
     DEFAULT_TTL = 60
 
     def __init__(self, id, variable, name, ttl=DEFAULT_TTL):
-        self.log = logging.getLogger('{}[{}]'.format(
-            self.__class__.__name__, id))
+        self.log = logging.getLogger(f'{self.__class__.__name__}[{id}]')
         self.log.debug('__init__: id=%s, variable=%s, name=%s, '
                        'ttl=%d', id, variable, name, ttl)
         super(EnvVarSource, self).__init__(id)

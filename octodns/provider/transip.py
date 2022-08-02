@@ -57,7 +57,7 @@ class TransipProvider(BaseProvider):
     ROOT_RECORD = '@'
 
     def __init__(self, id, account, key=None, key_file=None,  *args, **kwargs):
-        self.log = getLogger('TransipProvider[{}]'.format(id))
+        self.log = getLogger(f'TransipProvider[{id}]')
         self.log.debug('__init__: id=%s, account=%s, token=***', id,
                        account)
         super(TransipProvider, self).__init__(id, *args, **kwargs)
@@ -117,7 +117,7 @@ class TransipProvider(BaseProvider):
 
             for name, types in values.items():
                 for _type, records in types.items():
-                    data_for = getattr(self, '_data_for_{}'.format(_type))
+                    data_for = getattr(self, f'_data_for_{_type}')
                     record = Record.new(zone, name, data_for(_type, records),
                                         source=self, lenient=lenient)
                     zone.add_record(record, lenient=lenient)
@@ -143,8 +143,7 @@ class TransipProvider(BaseProvider):
         _dns_entries = []
         for record in plan.desired.records:
             if record._type in self.SUPPORTS:
-                entries_for = getattr(self,
-                                      '_entries_for_{}'.format(record._type))
+                entries_for = getattr(self, f'_entries_for_{record._type}')
 
                 # Root records have '@' as name
                 name = record.name
@@ -164,12 +163,10 @@ class TransipProvider(BaseProvider):
         self._currentZone = {}
 
     def _entries_for_multiple(self, name, record):
-        _entries = []
-
-        for value in record.values:
-            _entries.append(DnsEntry(name, record.ttl, record._type, value))
-
-        return _entries
+        return [
+            DnsEntry(name, record.ttl, record._type, value)
+            for value in record.values
+        ]
 
     def _entries_for_single(self, name, record):
 
@@ -185,7 +182,7 @@ class TransipProvider(BaseProvider):
         _entries = []
 
         for value in record.values:
-            content = "{} {}".format(value.preference, value.exchange)
+            content = f"{value.preference} {value.exchange}"
             _entries.append(DnsEntry(name, record.ttl, record._type, content))
 
         return _entries
@@ -194,8 +191,7 @@ class TransipProvider(BaseProvider):
         _entries = []
 
         for value in record.values:
-            content = "{} {} {} {}".format(value.priority, value.weight,
-                                           value.port, value.target)
+            content = f"{value.priority} {value.weight} {value.port} {value.target}"
             _entries.append(DnsEntry(name, record.ttl, record._type, content))
 
         return _entries
@@ -204,9 +200,7 @@ class TransipProvider(BaseProvider):
         _entries = []
 
         for value in record.values:
-            content = "{} {} {}".format(value.algorithm,
-                                        value.fingerprint_type,
-                                        value.fingerprint)
+            content = f"{value.algorithm} {value.fingerprint_type} {value.fingerprint}"
             _entries.append(DnsEntry(name, record.ttl, record._type, content))
 
         return _entries
@@ -215,8 +209,7 @@ class TransipProvider(BaseProvider):
         _entries = []
 
         for value in record.values:
-            content = "{} {} {}".format(value.flags, value.tag,
-                                        value.value)
+            content = f"{value.flags} {value.tag} {value.value}"
             _entries.append(DnsEntry(name, record.ttl, record._type, content))
 
         return _entries
@@ -241,9 +234,13 @@ class TransipProvider(BaseProvider):
             value = self._currentZone.name
 
         if value[-1] != '.':
-            self.log.debug('parseToFQDN: changed %s to %s', value,
-                           '{}.{}'.format(value, self._currentZone.name))
-            value = '{}.{}'.format(value, self._currentZone.name)
+            self.log.debug(
+                'parseToFQDN: changed %s to %s',
+                value,
+                f'{value}.{self._currentZone.name}',
+            )
+
+            value = f'{value}.{self._currentZone.name}'
 
         return value
 
@@ -255,11 +252,7 @@ class TransipProvider(BaseProvider):
 
     def _data_for_multiple(self, _type, records):
 
-        _values = []
-        for record in records:
-            # Enforce switch from suds.sax.text.Text to string
-            _values.append(str(record['content']))
-
+        _values = [str(record['content']) for record in records]
         return {
             'ttl': self._get_lowest_ttl(records),
             'type': _type,
@@ -342,10 +335,7 @@ class TransipProvider(BaseProvider):
         }
 
     def _data_for_TXT(self, _type, records):
-        _values = []
-        for record in records:
-            _values.append(record['content'].replace(';', '\\;'))
-
+        _values = [record['content'].replace(';', '\\;') for record in records]
         return {
             'type': _type,
             'ttl': self._get_lowest_ttl(records),

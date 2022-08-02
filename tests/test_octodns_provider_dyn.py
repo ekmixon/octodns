@@ -122,7 +122,7 @@ class TestDynProvider(TestCase):
         expected.add_record(Record.new(expected, name, data))
 
     @classmethod
-    def setUpClass(self):
+    def setUpClass(cls):
         # Get the DynectSession creation out of the way so that tests can
         # ignore it
         with patch('dyn.core.SessionEngine.execute',
@@ -668,8 +668,7 @@ class TestDynProviderGeo(TestCase):
         # reach in and bust the cache
         provider._traffic_directors = None
         tds = provider.traffic_directors
-        self.assertEquals(set(['unit.tests.', 'geo.unit.tests.']),
-                          set(tds.keys()))
+        self.assertEquals({'unit.tests.', 'geo.unit.tests.'}, set(tds.keys()))
         self.assertEquals(['A'], list(tds['unit.tests.'].keys()))
         self.assertEquals(['A'], list(tds['geo.unit.tests.'].keys()))
         provider.log.warn.assert_called_with("Unsupported TrafficDirector "
@@ -1624,10 +1623,7 @@ class DummyResponsePool(object):
 
     def __init__(self, label, records=[]):
         self.label = label
-        if records:
-            self.rs_chains = [DummyRsChains(records)]
-        else:
-            self.rs_chains = []
+        self.rs_chains = [DummyRsChains(records)] if records else []
 
     def refresh(self):
         pass

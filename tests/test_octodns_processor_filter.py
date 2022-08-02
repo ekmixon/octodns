@@ -59,7 +59,7 @@ class TestTypeAllowListFilter(TestCase):
         self.assertEquals(['txt', 'txt2'],
                           sorted([r.name for r in got.records]))
 
-        filter_a_aaaa = TypeAllowlistFilter('only-aaaa', set(('A', 'AAAA')))
+        filter_a_aaaa = TypeAllowlistFilter('only-aaaa', {'A', 'AAAA'})
         got = filter_a_aaaa.process_target_zone(zone)
         self.assertEquals(['a', 'a2', 'aaaa'],
                           sorted([r.name for r in got.records]))
@@ -84,7 +84,7 @@ class TestTypeRejectListFilter(TestCase):
         self.assertEquals(['a', 'a2', 'aaaa'],
                           sorted([r.name for r in got.records]))
 
-        filter_a_aaaa = TypeRejectlistFilter('not-a-aaaa', set(('A', 'AAAA')))
+        filter_a_aaaa = TypeRejectlistFilter('not-a-aaaa', {'A', 'AAAA'})
         got = filter_a_aaaa.process_target_zone(zone)
         self.assertEquals(['txt', 'txt2'],
                           sorted([r.name for r in got.records]))

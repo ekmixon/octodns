@@ -41,7 +41,7 @@ class Create(Change):
 
     def __repr__(self, leader=''):
         source = self.new.source.id if self.new.source else ''
-        return 'Create {} ({})'.format(self.new, source)
+        return f'Create {self.new} ({source})'
 
 
 class Update(Change):
@@ -63,7 +63,7 @@ class Delete(Change):
         super(Delete, self).__init__(existing, None)
 
     def __repr__(self, leader=''):
-        return 'Delete {}'.format(self.existing)
+        return f'Delete {self.existing}'
 
 
 class ValidationError(Exception):
@@ -84,11 +84,11 @@ class Record(EqualityTupleMixin):
     @classmethod
     def new(cls, zone, name, data, source=None, lenient=False):
         name = text_type(name)
-        fqdn = '{}.{}'.format(name, zone.name) if name else zone.name
+        fqdn = f'{name}.{zone.name}' if name else zone.name
         try:
             _type = data['type']
         except KeyError:
-            raise Exception('Invalid record {}, missing type'.format(fqdn))
+            raise Exception(f'Invalid record {fqdn}, missing type')
         try:
             _class = {
                 'A': ARecord,
@@ -108,7 +108,7 @@ class Record(EqualityTupleMixin):
                 'TXT': TxtRecord,
             }[_type]
         except KeyError:
-            raise Exception('Unknown record type: "{}"'.format(_type))
+            raise Exception(f'Unknown record type: "{_type}"')
         reasons = _class.validate(name, fqdn, data)
         try:
             lenient |= data['octodns']['lenient']
@@ -126,13 +126,11 @@ class Record(EqualityTupleMixin):
         reasons = []
         n = len(fqdn)
         if n > 253:
-            reasons.append('invalid fqdn, "{}" is too long at {} chars, max '
-                           'is 253'.format(fqdn, n))
+            reasons.append(f'invalid fqdn, "{fqdn}" is too long at {n} chars, max is 253')
         for label in name.split('.'):
             n = len(label)
             if n > 63:
-                reasons.append('invalid label, "{}" is too long at {} chars, '
-                               'max is 63'.format(label, n))
+                reasons.append(f'invalid label, "{label}" is too long at {n} chars, max is 63')
         try:
             ttl = int(data['ttl'])
             if ttl < 0:
@@ -141,7 +139,7 @@ class Record(EqualityTupleMixin):
             reasons.append('missing ttl')
         try:
             if data['octodns']['healthcheck']['protocol'] \
-               not in ('HTTP', 'HTTPS', 'TCP'):
+                   not in ('HTTP', 'HTTPS', 'TCP'):
                 reasons.append('invalid healthcheck protocol')
         except KeyError:
             pass
@@ -167,9 +165,7 @@ class Record(EqualityTupleMixin):
 
     @property
     def fqdn(self):
-        if self.name:
-            return '{}.{}'.format(self.name, self.zone.name)
-        return self.zone.name
+        return f'{self.name}.{self.zone.name}' if self.name else self.zone.name
 
     @property
     def ignored(self):
@@ -223,11 +219,7 @@ class Record(EqualityTupleMixin):
         data['type'] = self._type
 
         return Record.new(
-            zone if zone else self.zone,
-            self.name,
-            data,
-            self.source,
-            lenient=True
+            zone or self.zone, self.name, data, self.source, lenient=True
         )
 
     # NOTE: we're using __hash__ and ordering methods that consider Records
@@ -235,7 +227,7 @@ class Record(EqualityTupleMixin):
     # is useful when computing diffs/changes.
 
     def __hash__(self):
-        return '{}:{}'.format(self.name, self._type).__hash__()
+        return f'{self.name}:{self._type}'.__hash__()
 
     def _equality_tuple(self):
         return (self.name, self._type)
@@ -254,7 +246,7 @@ class GeoValue(EqualityTupleMixin):
         reasons = []
         match = cls.geo_re.match(code)
         if not match:
-            reasons.append('invalid geo "{}"'.format(code))
+            reasons.append(f'invalid geo "{code}"')
         return reasons
 
     def __init__(self, geo, values):
@@ -277,9 +269,7 @@ class GeoValue(EqualityTupleMixin):
                 self.values)
 
     def __repr__(self):
-        return "'Geo {} {} {} {}'".format(self.continent_code,
-                                          self.country_code,
-                                          self.subdivision_code, self.values)
+        return f"'Geo {self.continent_code} {self.country_code} {self.subdivision_code} {self.values}'"
 
 
 class _ValuesMixin(object):
@@ -316,8 +306,7 @@ class _ValuesMixin(object):
             elif len(values) == 1:
                 ret['value'] = values[0]
         elif len(self.values) == 1:
-            v = self.values[0]
-            if v:
+            if v := self.values[0]:
                 ret['value'] = getattr(v, 'data', v)
 
         return ret
@@ -325,9 +314,7 @@ class _ValuesMixin(object):
     def __repr__(self):
         values = "['{}']".format("', '".join([text_type(v)
                                               for v in self.values]))
-        return '<{} {} {}, {}, {}>'.format(self.__class__.__name__,
-                                           self._type, self.ttl,
-                                           self.fqdn, values)
+        return f'<{self.__class__.__name__} {self._type} {self.ttl}, {self.fqdn}, {values}>'
 
 
 class _GeoMixin(_ValuesMixin):
@@ -361,24 +348,19 @@ class _GeoMixin(_ValuesMixin):
     def _data(self):
         ret = super(_GeoMixin, self)._data()
         if self.geo:
-            geo = {}
-            for code, value in self.geo.items():
-                geo[code] = value.values
+            geo = {code: value.values for code, value in self.geo.items()}
             ret['geo'] = geo
         return ret
 
     def changes(self, other, target):
-        if target.SUPPORTS_GEO:
-            if self.geo != other.geo:
-                return Update(self, other)
+        if target.SUPPORTS_GEO and self.geo != other.geo:
+            return Update(self, other)
         return super(_GeoMixin, self).changes(other, target)
 
     def __repr__(self):
         if self.geo:
-            return '<{} {} {}, {}, {}, {}>'.format(self.__class__.__name__,
-                                                   self._type, self.ttl,
-                                                   self.fqdn, self.values,
-                                                   self.geo)
+            return f'<{self.__class__.__name__} {self._type} {self.ttl}, {self.fqdn}, {self.values}, {self.geo}>'
+
         return super(_GeoMixin, self).__repr__()
 
 
@@ -407,9 +389,7 @@ class _ValueMixin(object):
         return ret
 
     def __repr__(self):
-        return '<{} {} {}, {}, {}>'.format(self.__class__.__name__,
-                                           self._type, self.ttl,
-                                           self.fqdn, self.value)
+        return f'<{self.__class__.__name__} {self._type} {self.ttl}, {self.fqdn}, {self.value}>'
 
 
 class _DynamicPool(object):
@@ -445,15 +425,13 @@ class _DynamicPool(object):
         return self.data
 
     def __eq__(self, other):
-        if not isinstance(other, _DynamicPool):
-            return False
-        return self.data == other.data
+        return self.data == other.data if isinstance(other, _DynamicPool) else False
 
     def __ne__(self, other):
         return not self.__eq__(other)
 
     def __repr__(self):
-        return '{}'.format(self.data)
+        return f'{self.data}'
 
 
 class _DynamicRule(object):
@@ -475,15 +453,13 @@ class _DynamicRule(object):
         return self.data
 
     def __eq__(self, other):
-        if not isinstance(other, _DynamicRule):
-            return False
-        return self.data == other.data
+        return self.data == other.data if isinstance(other, _DynamicRule) else False
 
     def __ne__(self, other):
         return not self.__eq__(other)
 
     def __repr__(self):
-        return '{}'.format(self.data)
+        return f'{self.data}'
 
 
 class _Dynamic(object):
@@ -493,28 +469,25 @@ class _Dynamic(object):
         self.rules = rules
 
     def _data(self):
-        pools = {}
-        for _id, pool in self.pools.items():
-            pools[_id] = pool._data()
-        rules = []
-        for rule in self.rules:
-            rules.append(rule._data())
+        pools = {_id: pool._data() for _id, pool in self.pools.items()}
+        rules = [rule._data() for rule in self.rules]
         return {
             'pools': pools,
             'rules': rules,
         }
 
     def __eq__(self, other):
-        if not isinstance(other, _Dynamic):
-            return False
-        ret = self.pools == other.pools and self.rules == other.rules
-        return ret
+        return (
+            self.pools == other.pools and self.rules == other.rules
+            if isinstance(other, _Dynamic)
+            else False
+        )
 
     def __ne__(self, other):
         return not self.__eq__(other)
 
     def __repr__(self):
-        return '{}, {}'.format(self.pools, self.rules)
+        return f'{self.pools}, {self.rules}'
 
 
 class _DynamicMixin(object):
@@ -545,12 +518,12 @@ class _DynamicMixin(object):
         else:
             for _id, pool in sorted(pools.items()):
                 if not isinstance(pool, dict):
-                    reasons.append('pool "{}" must be a dict'.format(_id))
+                    reasons.append(f'pool "{_id}" must be a dict')
                     continue
                 try:
                     values = pool['values']
                 except KeyError:
-                    reasons.append('pool "{}" is missing values'.format(_id))
+                    reasons.append(f'pool "{_id}" is missing values')
                     continue
 
                 pools_exist.add(_id)
@@ -561,35 +534,28 @@ class _DynamicMixin(object):
                         weight = value['weight']
                         weight = int(weight)
                         if weight < 1 or weight > 15:
-                            reasons.append('invalid weight "{}" in pool "{}" '
-                                           'value {}'.format(weight, _id,
-                                                             value_num))
+                            reasons.append(f'invalid weight "{weight}" in pool "{_id}" value {value_num}')
                     except KeyError:
                         pass
                     except ValueError:
-                        reasons.append('invalid weight "{}" in pool "{}" '
-                                       'value {}'.format(weight, _id,
-                                                         value_num))
+                        reasons.append(f'invalid weight "{weight}" in pool "{_id}" value {value_num}')
 
                     try:
                         value = value['value']
                         reasons.extend(cls._value_type.validate(value,
                                                                 cls._type))
                     except KeyError:
-                        reasons.append('missing value in pool "{}" '
-                                       'value {}'.format(_id, value_num))
+                        reasons.append(f'missing value in pool "{_id}" value {value_num}')
 
                 if len(values) == 1 and values[0].get('weight', 1) != 1:
-                    reasons.append('pool "{}" has single value with '
-                                   'weight!=1'.format(_id))
+                    reasons.append(f'pool "{_id}" has single value with weight!=1')
 
                 fallback = pool.get('fallback', None)
                 if fallback is not None:
                     if fallback in pools:
                         pools_seen_as_fallback.add(fallback)
                     else:
-                        reasons.append('undefined fallback "{}" for pool "{}"'
-                                       .format(fallback, _id))
+                        reasons.append(f'undefined fallback "{fallback}" for pool "{_id}"')
 
                 # Check for loops
                 fallback = pools[_id].get('fallback', None)
@@ -599,8 +565,7 @@ class _DynamicMixin(object):
                     fallback = pools.get(fallback, {}).get('fallback', None)
                     if fallback in seen:
                         loop = ' -> '.join(seen)
-                        reasons.append('loop in pool fallbacks: {}'
-                                       .format(loop))
+                        reasons.append(f'loop in pool fallbacks: {loop}')
                         # exit the loop
                         break
                     seen.append(fallback)
@@ -623,7 +588,7 @@ class _DynamicMixin(object):
                 try:
                     pool = rule['pool']
                 except KeyError:
-                    reasons.append('rule {} missing pool'.format(rule_num))
+                    reasons.append(f'rule {rule_num} missing pool')
                     continue
 
                 try:
@@ -632,35 +597,28 @@ class _DynamicMixin(object):
                     geos = []
 
                 if not isinstance(pool, string_types):
-                    reasons.append('rule {} invalid pool "{}"'
-                                   .format(rule_num, pool))
+                    reasons.append(f'rule {rule_num} invalid pool "{pool}"')
                 else:
                     if pool not in pools:
-                        reasons.append('rule {} undefined pool "{}"'
-                                       .format(rule_num, pool))
+                        reasons.append(f'rule {rule_num} undefined pool "{pool}"')
                     elif pool in pools_seen and geos:
-                        reasons.append('rule {} invalid, target pool "{}" '
-                                       'reused'.format(rule_num, pool))
+                        reasons.append(f'rule {rule_num} invalid, target pool "{pool}" reused')
                     pools_seen.add(pool)
 
                 if not geos:
                     if seen_default:
-                        reasons.append('rule {} duplicate default'
-                                       .format(rule_num))
+                        reasons.append(f'rule {rule_num} duplicate default')
                     seen_default = True
 
                 if not isinstance(geos, (list, tuple)):
-                    reasons.append('rule {} geos must be a list'
-                                   .format(rule_num))
+                    reasons.append(f'rule {rule_num} geos must be a list')
                 else:
                     for geo in geos:
-                        reasons.extend(GeoCodes.validate(geo, 'rule {} '
-                                                         .format(rule_num)))
+                        reasons.extend(GeoCodes.validate(geo, f'rule {rule_num} '))
 
-        unused = pools_exist - pools_seen - pools_seen_as_fallback
-        if unused:
+        if unused := pools_exist - pools_seen - pools_seen_as_fallback:
             unused = '", "'.join(sorted(unused))
-            reasons.append('unused pools: "{}"'.format(unused))
+            reasons.append(f'unused pools: "{unused}"')
 
         return reasons
 
@@ -688,10 +646,7 @@ class _DynamicMixin(object):
         except:
             rules = []
 
-        parsed = []
-        for i, rule in enumerate(rules):
-            parsed.append(_DynamicRule(i, rule))
-
+        parsed = [_DynamicRule(i, rule) for i, rule in enumerate(rules)]
         # dynamic
         self.dynamic = _Dynamic(pools, parsed)
 
@@ -702,9 +657,8 @@ class _DynamicMixin(object):
         return ret
 
     def changes(self, other, target):
-        if target.SUPPORTS_DYNAMIC:
-            if self.dynamic != other.dynamic:
-                return Update(self, other)
+        if target.SUPPORTS_DYNAMIC and self.dynamic != other.dynamic:
+            return Update(self, other)
         return super(_DynamicMixin, self).changes(other, target)
 
     def __repr__(self):
@@ -718,10 +672,8 @@ class _DynamicMixin(object):
             except AttributeError:
                 values = self.value
 
-            return '<{} {} {}, {}, {}, {}>'.format(self.__class__.__name__,
-                                                   self._type, self.ttl,
-                                                   self.fqdn, values,
-                                                   self.dynamic)
+            return f'<{self.__class__.__name__} {self._type} {self.ttl}, {self.fqdn}, {values}, {self.dynamic}>'
+
         return super(_DynamicMixin, self).__repr__()
 
 
@@ -743,8 +695,7 @@ class _IpList(object):
                 try:
                     cls._address_type(text_type(value))
                 except Exception:
-                    reasons.append('invalid {} address "{}"'
-                                   .format(cls._address_name, value))
+                    reasons.append(f'invalid {cls._address_name} address "{value}"')
         return reasons
 
     @classmethod
@@ -772,21 +723,15 @@ class _TargetValue(object):
             reasons.append('empty value')
         elif not data:
             reasons.append('missing value')
-        # NOTE: FQDN complains if the data it receives isn't a str, it doesn't
-        # allow unicode... This is likely specific to 2.7
         elif not FQDN(str(data), allow_underscores=True).is_valid:
-            reasons.append('{} value "{}" is not a valid FQDN'
-                           .format(_type, data))
+            reasons.append(f'{_type} value "{data}" is not a valid FQDN')
         elif not data.endswith('.'):
-            reasons.append('{} value "{}" missing trailing .'
-                           .format(_type, data))
+            reasons.append(f'{_type} value "{data}" missing trailing .')
         return reasons
 
     @classmethod
-    def process(self, value):
-        if value:
-            return value.lower()
-        return value
+    def process(cls, value):
+        return value.lower() if value else value
 
 
 class CnameValue(_TargetValue):
@@ -867,7 +812,7 @@ class CaaValue(EqualityTupleMixin):
         return (self.flags, self.tag, self.value)
 
     def __repr__(self):
-        return '{} {} "{}"'.format(self.flags, self.tag, self.value)
+        return f'{self.flags} {self.tag} "{self.value}"'
 
 
 class CaaRecord(_ValuesMixin, Record):
@@ -938,13 +883,11 @@ class LocValue(EqualityTupleMixin):
                             not 0 <= int(value[key]) <= 59
                         )
                     ):
-                        reasons.append('invalid value for {} "{}"'
-                                       .format(key, value[key]))
+                        reasons.append(f'invalid value for {key} "{value[key]}"')
                 except KeyError:
-                    reasons.append('missing {}'.format(key))
+                    reasons.append(f'missing {key}')
                 except ValueError:
-                    reasons.append('invalid {} "{}"'
-                                   .format(key, value[key]))
+                    reasons.append(f'invalid {key} "{value[key]}"')
 
             for key in float_keys:
                 try:
@@ -963,13 +906,11 @@ class LocValue(EqualityTupleMixin):
                             not 0 <= float(value[key]) <= 90000000.00
                         )
                     ):
-                        reasons.append('invalid value for {} "{}"'
-                                       .format(key, value[key]))
+                        reasons.append(f'invalid value for {key} "{value[key]}"')
                 except KeyError:
-                    reasons.append('missing {}'.format(key))
+                    reasons.append(f'missing {key}')
                 except ValueError:
-                    reasons.append('invalid {} "{}"'
-                                   .format(key, value[key]))
+                    reasons.append(f'invalid {key} "{value[key]}"')
 
             for key in direction_keys:
                 try:
@@ -978,16 +919,14 @@ class LocValue(EqualityTupleMixin):
                         key == 'lat_direction' and
                         value[key] not in ['N', 'S']
                     ):
-                        reasons.append('invalid direction for {} "{}"'
-                                       .format(key, value[key]))
+                        reasons.append(f'invalid direction for {key} "{value[key]}"')
                     if (
                         key == 'long_direction' and
                         value[key] not in ['E', 'W']
                     ):
-                        reasons.append('invalid direction for {} "{}"'
-                                       .format(key, value[key]))
+                        reasons.append(f'invalid direction for {key} "{value[key]}"')
                 except KeyError:
-                    reasons.append('missing {}'.format(key))
+                    reasons.append(f'missing {key}')
         return reasons
 
     @classmethod
@@ -1142,7 +1081,7 @@ class MxValue(EqualityTupleMixin):
         return (self.preference, self.exchange)
 
     def __repr__(self):
-        return "'{} {}'".format(self.preference, self.exchange)
+        return f"'{self.preference} {self.exchange}'"
 
 
 class MxRecord(_ValuesMixin, Record):
@@ -1220,9 +1159,7 @@ class NaptrValue(EqualityTupleMixin):
         flags = self.flags if self.flags is not None else ''
         service = self.service if self.service is not None else ''
         regexp = self.regexp if self.regexp is not None else ''
-        return "'{} {} \"{}\" \"{}\" \"{}\" {}'" \
-            .format(self.order, self.preference, flags, service, regexp,
-                    self.replacement)
+        return f"""'{self.order} {self.preference} \"{flags}\" \"{service}\" \"{regexp}\" {self.replacement}'"""
 
 
 class NaptrRecord(_ValuesMixin, Record):
@@ -1238,12 +1175,11 @@ class _NsValue(object):
             return ['missing value(s)']
         elif not isinstance(data, (list, tuple)):
             data = (data,)
-        reasons = []
-        for value in data:
-            if not value.endswith('.'):
-                reasons.append('NS value "{}" missing trailing .'
-                               .format(value))
-        return reasons
+        return [
+            f'NS value "{value}" missing trailing .'
+            for value in data
+            if not value.endswith('.')
+        ]
 
     @classmethod
     def process(cls, values):
@@ -1322,8 +1258,7 @@ class SshfpValue(EqualityTupleMixin):
         return (self.algorithm, self.fingerprint_type, self.fingerprint)
 
     def __repr__(self):
-        return "'{} {} {}'".format(self.algorithm, self.fingerprint_type,
-                                   self.fingerprint)
+        return f"'{self.algorithm} {self.fingerprint_type} {self.fingerprint}'"
 
 
 class SshfpRecord(_ValuesMixin, Record):
@@ -1340,14 +1275,11 @@ class _ChunkedValuesMixin(_ValuesMixin):
         vs = [value[i:i + self.CHUNK_SIZE]
               for i in range(0, len(value), self.CHUNK_SIZE)]
         vs = '" "'.join(vs)
-        return '"{}"'.format(vs)
+        return f'"{vs}"'
 
     @property
     def chunked_values(self):
-        values = []
-        for v in self.values:
-            values.append(self.chunked_value(v))
-        return values
+        return [self.chunked_value(v) for v in self.values]
 
 
 class _ChunkedValue(object):
@@ -1359,11 +1291,11 @@ class _ChunkedValue(object):
             return ['missing value(s)']
         elif not isinstance(data, (list, tuple)):
             data = (data,)
-        reasons = []
-        for value in data:
-            if cls._unescaped_semicolon_re.search(value):
-                reasons.append('unescaped ; in "{}"'.format(value))
-        return reasons
+        return [
+            f'unescaped ; in "{value}"'
+            for value in data
+            if cls._unescaped_semicolon_re.search(value)
+        ]
 
     @classmethod
     def process(cls, values):
@@ -1442,8 +1374,7 @@ class SrvValue(EqualityTupleMixin):
         return (self.priority, self.weight, self.port, self.target)
 
     def __repr__(self):
-        return "'{} {} {} {}'".format(self.priority, self.weight, self.port,
-                                      self.target)
+        return f"'{self.priority} {self.weight} {self.port} {self.target}'"
 
 
 class SrvRecord(_ValuesMixin, Record):

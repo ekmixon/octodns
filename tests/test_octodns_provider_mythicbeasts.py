@@ -250,8 +250,8 @@ class TestMythicBeastsProvider(TestCase):
 
             # Now test deletion
             existing = 'prawf-txt 300 TXT prawf prawf dyma prawf\n' \
-                'prawf-txt2 300 TXT v=DKIM1; k=rsa; p=prawf\n' \
-                'prawf-a 60 A 1.2.3.4'
+                    'prawf-txt2 300 TXT v=DKIM1; k=rsa; p=prawf\n' \
+                    'prawf-a 60 A 1.2.3.4'
 
             with requests_mock() as mock:
                 mock.post(ANY, status_code=200, text=existing)
@@ -320,7 +320,7 @@ class TestMythicBeastsProvider(TestCase):
             mock.post(ANY, status_code=401, text='ERR Not authenticated')
 
             with self.assertRaises(AssertionError) as err:
-                provider = MythicBeastsProvider('test', dict())
+                provider = MythicBeastsProvider('test', {})
                 zone = Zone('unit.tests.', [])
                 provider.populate(zone)
             self.assertEquals(
@@ -429,7 +429,7 @@ class TestMythicBeastsProvider(TestCase):
             wanted = Zone('unit.tests.', [])
             for record in list(self.expected.records):
                 data = {'type': record._type}
-                data.update(record.data)
+                data |= record.data
                 wanted.add_record(Record.new(wanted, record.name, data))
 
             wanted.add_record(Record.new(wanted, 'prawf', {

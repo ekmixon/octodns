@@ -73,11 +73,9 @@ class TestEasyDNSProvider(TestCase):
         with requests_mock() as mock:
             base = 'https://rest.easydns.net/zones/records/'
             with open('tests/fixtures/easydns-records.json') as fh:
-                mock.get('{}{}'.format(base, 'parsed/unit.tests'),
-                         text=fh.read())
+                mock.get(f'{base}parsed/unit.tests', text=fh.read())
             with open('tests/fixtures/easydns-records.json') as fh:
-                mock.get('{}{}'.format(base, 'all/unit.tests'),
-                         text=fh.read())
+                mock.get(f'{base}all/unit.tests', text=fh.read())
 
                 provider.populate(zone)
                 self.assertEquals(15, len(zone.records))
@@ -97,9 +95,13 @@ class TestEasyDNSProvider(TestCase):
 
         with requests_mock() as mock:
             base = 'https://rest.easydns.net/'
-            mock.get('{}{}'.format(base, 'domain/unit.tests'), status_code=400,
-                     text='{"id":"not_found","message":"The resource you '
-                     'were accessing could not be found."}')
+            mock.get(
+                f'{base}domain/unit.tests',
+                status_code=400,
+                text='{"id":"not_found","message":"The resource you '
+                'were accessing could not be found."}',
+            )
+
 
             with self.assertRaises(Exception) as ctx:
                 provider._client.domain('unit.tests')
@@ -119,20 +121,33 @@ class TestEasyDNSProvider(TestCase):
 
         with requests_mock() as mock:
             base = 'https://rest.easydns.net/'
-            mock.get('{}{}'.format(base, 'domain/unit.tests'), status_code=404,
-                     text='{"id":"not_found","message":"The resource you '
-                     'were accessing could not be found."}')
-            mock.put('{}{}'.format(base, 'domains/add/unit.tests'),
-                     status_code=200,
-                     text='{"id":"OK","message":"Zone created."}')
-            mock.get('{}{}'.format(base, 'zones/records/parsed/unit.tests'),
-                     status_code=404,
-                     text='{"id":"not_found","message":"The resource you '
-                     'were accessing could not be found."}')
-            mock.get('{}{}'.format(base, 'zones/records/all/unit.tests'),
-                     status_code=404,
-                     text='{"id":"not_found","message":"The resource you '
-                     'were accessing could not be found."}')
+            mock.get(
+                f'{base}domain/unit.tests',
+                status_code=404,
+                text='{"id":"not_found","message":"The resource you '
+                'were accessing could not be found."}',
+            )
+
+            mock.put(
+                f'{base}domains/add/unit.tests',
+                status_code=200,
+                text='{"id":"OK","message":"Zone created."}',
+            )
+
+            mock.get(
+                f'{base}zones/records/parsed/unit.tests',
+                status_code=404,
+                text='{"id":"not_found","message":"The resource you '
+                'were accessing could not be found."}',
+            )
+
+            mock.get(
+                f'{base}zones/records/all/unit.tests',
+                status_code=404,
+                text='{"id":"not_found","message":"The resource you '
+                'were accessing could not be found."}',
+            )
+
 
             plan = provider.plan(wanted)
             self.assertFalse(plan.exists)
@@ -186,10 +201,12 @@ class TestEasyDNSProvider(TestCase):
         }
         with requests_mock() as mock:
             base = 'https://rest.easydns.net/'
-            mock.put('{}{}'.format(base, 'domains/add/unit.tests'),
-                     status_code=201, text='{"id":"OK"}')
-            mock.get('{}{}'.format(base, 'zones/records/all/unit.tests'),
-                     text=json.dumps(domain_after_creation))
+            mock.put(f'{base}domains/add/unit.tests', status_code=201, text='{"id":"OK"}')
+            mock.get(
+                f'{base}zones/records/all/unit.tests',
+                text=json.dumps(domain_after_creation),
+            )
+
             mock.delete(ANY, text='{"id":"OK"}')
             provider._client.domain_create('unit.tests')
 

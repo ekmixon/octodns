@@ -20,7 +20,7 @@ def _value_keyer(v):
 def add_trailing_dot(s):
     assert s
     assert s[-1] != '.'
-    return s + '.'
+    return f'{s}.'
 
 
 def remove_trailing_dot(s):
@@ -58,7 +58,7 @@ class RackspaceProvider(BaseProvider):
             # The api key that grants access for that user (required)
             api_key: api-key
         '''
-        self.log = logging.getLogger('RackspaceProvider[{}]'.format(id))
+        self.log = logging.getLogger(f'RackspaceProvider[{id}]')
         super(RackspaceProvider, self).__init__(id, *args, **kwargs)
 
         auth_token, dns_endpoint = self._get_auth_token(username, api_key)
@@ -91,7 +91,7 @@ class RackspaceProvider(BaseProvider):
 
     def _request(self, method, path, data=None, pagination_key=None):
         self.log.debug('_request: method=%s, path=%s', method, path)
-        url = '{}/{}'.format(self.dns_endpoint, path)
+        url = f'{self.dns_endpoint}/{path}'
 
         if pagination_key:
             resp = self._paginated_request_for_url(method, url, data,
@@ -115,15 +115,13 @@ class RackspaceProvider(BaseProvider):
         resp.raise_for_status()
         acc.extend(resp.json()[pagination_key])
 
-        next_page = [x for x in resp.json().get('links', []) if
-                     x['rel'] == 'next']
-        if next_page:
+        if next_page := [
+            x for x in resp.json().get('links', []) if x['rel'] == 'next'
+        ]:
             url = next_page[0]['href']
             acc.extend(self._paginated_request_for_url(method, url, data,
                                                        pagination_key))
-            return acc
-        else:
-            return acc
+        return acc
 
     def _post(self, path, data=None):
         return self._request('POST', path, data=data)
@@ -177,12 +175,14 @@ class RackspaceProvider(BaseProvider):
     _data_for_TXT = _data_for_textual
 
     def _data_for_MX(self, rrset):
-        values = []
-        for record in rrset:
-            values.append({
+        values = [
+            {
                 'priority': record['priority'],
                 'value': add_trailing_dot(record['data']),
-            })
+            }
+            for record in rrset
+        ]
+
         return {
             'type': rrset[0]['type'],
             'values': values,
@@ -194,9 +194,10 @@ class RackspaceProvider(BaseProvider):
         resp_data = None
         try:
             domain_id = self._get_zone_id_for(zone)
-            resp_data = self._request('GET',
-                                      'domains/{}/records'.format(domain_id),
-                                      pagination_key='records')
+            resp_data = self._request(
+                'GET', f'domains/{domain_id}/records', pagination_key='records'
+            )
+
             self.log.debug('populate:   loaded')
         except HTTPError as e:
             if e.response.status_code == 401:
@@ -213,8 +214,7 @@ class RackspaceProvider(BaseProvider):
             records = self._group_records(resp_data)
             for record_type, records_of_type in records.items():
                 for raw_record_name, record_set in records_of_type.items():
-                    data_for = getattr(self,
-                                       '_data_for_{}'.format(record_type))
+                    data_for = getattr(self, f'_data_for_{record_type}')
                     record_name = zone.hostname_from_fqdn(raw_record_name)
                     record = Record.new(zone, record_name,
                                         data_for(record_set),
@@ -291,7 +291,7 @@ class RackspaceProvider(BaseProvider):
                                                 self._get_values(change.new))
 
     def _create_given_change_values(self, change, values):
-        transformer = getattr(self, "_record_for_{}".format(change.new._type))
+        transformer = getattr(self, f"_record_for_{change.new._type}")
         return [transformer(change.new, v) for v in values]
 
     def _mod_Update(self, change):
@@ -311,8 +311,7 @@ class RackspaceProvider(BaseProvider):
         update_out = []
         update_values = set(new_values).intersection(set(existing_values))
         for value in update_values:
-            transformer = getattr(self,
-                                  "_record_for_{}".format(change.new._type))
+            transformer = getattr(self, f"_record_for_{change.new._type}")
             prior_rs_record = transformer(change.existing, value)
             prior_key = self._key_for_record(prior_rs_record)
             next_rs_record = transformer(change.new, value)
@@ -329,13 +328,12 @@ class RackspaceProvider(BaseProvider):
             change.existing))
 
     def _delete_given_change_values(self, change, values):
-        transformer = getattr(self, "_record_for_{}".format(
-            change.existing._type))
+        transformer = getattr(self, f"_record_for_{change.existing._type}")
         out = []
         for value in values:
             rs_record = transformer(change.existing, value)
             key = self._key_for_record(rs_record)
-            out.append('id=' + self._id_map[key])
+            out.append(f'id={self._id_map[key]}')
             del self._id_map[key]
         return out
 
@@ -367,12 +365,12 @@ class RackspaceProvider(BaseProvider):
 
         if deletes:
             params = "&".join(sorted(deletes))
-            self._delete('domains/{}/records?{}'.format(domain_id, params))
+            self._delete(f'domains/{domain_id}/records?{params}')
 
         if updates:
             data = {"records": sorted(updates, key=_value_keyer)}
-            self._put('domains/{}/records'.format(domain_id), data=data)
+            self._put(f'domains/{domain_id}/records', data=data)
 
         if creates:
             data = {"records": sorted(creates, key=_value_keyer)}
-            self._post('domains/{}/records'.format(domain_id), data=data)
+            self._post(f'domains/{domain_id}/records', data=data)

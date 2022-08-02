@@ -25,7 +25,7 @@ class ArgumentParser(_Base):
         super(ArgumentParser, self).__init__(*args, **kwargs)
 
     def parse_args(self, default_log_level=INFO):
-        version = 'octoDNS {}'.format(__VERSION__)
+        version = f'octoDNS {__VERSION__}'
         self.add_argument('--version', action='version', version=version,
                           help='Print octoDNS version and exit')
         self.add_argument('--log-stream-stdout', action='store_true',
@@ -58,7 +58,7 @@ class ArgumentParser(_Base):
 
         if args.log_syslog:
             fmt = 'octodns[%(process)-5s:%(thread)d]: %(name)s ' \
-                '%(levelname)-5s %(message)s'
+                    '%(levelname)-5s %(message)s'
             handler = SysLogHandler(address=args.syslog_device,
                                     facility=args.syslog_facility)
             handler.setFormatter(Formatter(fmt=fmt))

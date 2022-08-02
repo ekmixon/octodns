@@ -133,8 +133,7 @@ class TestRecord(TestCase):
         self.assertEquals(other, update.new)
 
         # Hashing
-        records = set()
-        records.add(a)
+        records = {a}
         self.assertTrue(a in records)
         self.assertFalse(b in records)
         records.add(b)
@@ -1316,8 +1315,7 @@ class TestRecord(TestCase):
         self.assertTrue(c <= c)
 
         # Hash
-        values = set()
-        values.add(a)
+        values = {a}
         self.assertTrue(a in values)
         self.assertFalse(b in values)
         values.add(b)
@@ -1419,8 +1417,7 @@ class TestRecord(TestCase):
         self.assertTrue(c <= c)
 
         # Hash
-        values = set()
-        values.add(a)
+        values = {a}
         self.assertTrue(a in values)
         self.assertFalse(b in values)
         values.add(b)
@@ -1485,8 +1482,7 @@ class TestRecord(TestCase):
         self.assertTrue(c <= c)
 
         # Hash
-        values = set()
-        values.add(a)
+        values = {a}
         self.assertTrue(a in values)
         self.assertFalse(b in values)
         values.add(b)
@@ -2548,7 +2544,7 @@ class TestRecordValidation(TestCase):
                     'ttl': 600,
                     'value': v
                 })
-            self.assertEquals(['missing {}'.format(k)], ctx.exception.reasons)
+            self.assertEquals([f'missing {k}'], ctx.exception.reasons)
 
         # non-int order
         v = dict(value)
@@ -2961,23 +2957,23 @@ class TestRecordValidation(TestCase):
 
     def test_TXT_long_value_chunking(self):
         expected = '"Lorem ipsum dolor sit amet, consectetur adipiscing ' \
-            'elit, sed do eiusmod tempor incididunt ut labore et dolore ' \
-            'magna aliqua. Ut enim ad minim veniam, quis nostrud ' \
-            'exercitation ullamco laboris nisi ut aliquip ex ea commodo ' \
-            'consequat. Duis aute irure dolor i" "n reprehenderit in ' \
-            'voluptate velit esse cillum dolore eu fugiat nulla pariatur. ' \
-            'Excepteur sint occaecat cupidatat non proident, sunt in culpa ' \
-            'qui officia deserunt mollit anim id est laborum."'
+                'elit, sed do eiusmod tempor incididunt ut labore et dolore ' \
+                'magna aliqua. Ut enim ad minim veniam, quis nostrud ' \
+                'exercitation ullamco laboris nisi ut aliquip ex ea commodo ' \
+                'consequat. Duis aute irure dolor i" "n reprehenderit in ' \
+                'voluptate velit esse cillum dolore eu fugiat nulla pariatur. ' \
+                'Excepteur sint occaecat cupidatat non proident, sunt in culpa ' \
+                'qui officia deserunt mollit anim id est laborum."'
 
         long_value = 'Lorem ipsum dolor sit amet, consectetur adipiscing ' \
-            'elit, sed do eiusmod tempor incididunt ut labore et dolore ' \
-            'magna aliqua. Ut enim ad minim veniam, quis nostrud ' \
-            'exercitation ullamco laboris nisi ut aliquip ex ea commodo ' \
-            'consequat. Duis aute irure dolor in reprehenderit in ' \
-            'voluptate velit esse cillum dolore eu fugiat nulla ' \
-            'pariatur. Excepteur sint occaecat cupidatat non proident, ' \
-            'sunt in culpa qui officia deserunt mollit anim id est ' \
-            'laborum.'
+                'elit, sed do eiusmod tempor incididunt ut labore et dolore ' \
+                'magna aliqua. Ut enim ad minim veniam, quis nostrud ' \
+                'exercitation ullamco laboris nisi ut aliquip ex ea commodo ' \
+                'consequat. Duis aute irure dolor in reprehenderit in ' \
+                'voluptate velit esse cillum dolore eu fugiat nulla ' \
+                'pariatur. Excepteur sint occaecat cupidatat non proident, ' \
+                'sunt in culpa qui officia deserunt mollit anim id est ' \
+                'laborum.'
         # Single string
         single = Record.new(self.zone, '', {
             'type': 'TXT',
@@ -2995,14 +2991,14 @@ class TestRecordValidation(TestCase):
         self.assertEquals(expected, single.chunked_values[0])
 
         long_split_value = '"Lorem ipsum dolor sit amet, consectetur ' \
-            'adipiscing elit, sed do eiusmod tempor incididunt ut ' \
-            'labore et dolore magna aliqua. Ut enim ad minim veniam, ' \
-            'quis nostrud exercitation ullamco laboris nisi ut aliquip ' \
-            'ex" " ea commodo consequat. Duis aute irure dolor in ' \
-            'reprehenderit in voluptate velit esse cillum dolore eu ' \
-            'fugiat nulla pariatur. Excepteur sint occaecat cupidatat ' \
-            'non proident, sunt in culpa qui officia deserunt mollit ' \
-            'anim id est laborum."'
+                'adipiscing elit, sed do eiusmod tempor incididunt ut ' \
+                'labore et dolore magna aliqua. Ut enim ad minim veniam, ' \
+                'quis nostrud exercitation ullamco laboris nisi ut aliquip ' \
+                'ex" " ea commodo consequat. Duis aute irure dolor in ' \
+                'reprehenderit in voluptate velit esse cillum dolore eu ' \
+                'fugiat nulla pariatur. Excepteur sint occaecat cupidatat ' \
+                'non proident, sunt in culpa qui officia deserunt mollit ' \
+                'anim id est laborum."'
         # Chunked
         chunked = Record.new(self.zone, '', {
             'type': 'TXT',

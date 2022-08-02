@@ -36,9 +36,8 @@ class Zone(object):
     log = getLogger('Zone')
 
     def __init__(self, name, sub_zones):
-        if not name[-1] == '.':
-            raise Exception('Invalid zone name {}, missing ending dot'
-                            .format(name))
+        if name[-1] != '.':
+            raise Exception(f'Invalid zone name {name}, missing ending dot')
         # Force everything to lowercase just to be safe
         self.name = text_type(name).lower() if name else name
         self.sub_zones = sub_zones
@@ -47,13 +46,13 @@ class Zone(object):
         self._records = defaultdict(set)
         # optional leading . to match empty hostname
         # optional trailing . b/c some sources don't have it on their fqdn
-        self._name_re = re.compile(r'\.?{}?$'.format(name))
+        self._name_re = re.compile(f'\.?{name}?$')
 
         self.log.debug('__init__: zone=%s, sub_zones=%s', self, sub_zones)
 
     @property
     def records(self):
-        return set([r for _, node in self._records.items() for r in node])
+        return {r for _, node in self._records.items() for r in node}
 
     def hostname_from_fqdn(self, fqdn):
         return self._name_re.sub('', fqdn)
@@ -65,14 +64,16 @@ class Zone(object):
         if not lenient and last in self.sub_zones:
             if name != last:
                 # it's a record for something under a sub-zone
-                raise SubzoneRecordException('Record {} is under a '
-                                             'managed subzone'
-                                             .format(record.fqdn))
+                raise SubzoneRecordException(
+                    f'Record {record.fqdn} is under a managed subzone'
+                )
+
             elif record._type != 'NS':
                 # It's a non NS record for exactly a sub-zone
-                raise SubzoneRecordException('Record {} a managed sub-zone '
-                                             'and not of type NS'
-                                             .format(record.fqdn))
+                raise SubzoneRecordException(
+                    f'Record {record.fqdn} a managed sub-zone and not of type NS'
+                )
+
 
         if replace:
             # will remove it if it exists
@@ -81,16 +82,18 @@ class Zone(object):
         node = self._records[name]
         if record in node:
             # We already have a record at this node of this type
-            raise DuplicateRecordException('Duplicate record {}, type {}'
-                                           .format(record.fqdn,
-                                                   record._type))
+            raise DuplicateRecordException(
+                f'Duplicate record {record.fqdn}, type {record._type}'
+            )
+
         elif not lenient and ((record._type == 'CNAME' and len(node) > 0) or
                               ('CNAME' in [r._type for r in node])):
             # We're adding a CNAME to existing records or adding to an existing
             # CNAME
-            raise InvalidNodeException('Invalid state, CNAME at {} cannot '
-                                       'coexist with other records'
-                                       .format(record.fqdn))
+            raise InvalidNodeException(
+                f'Invalid state, CNAME at {record.fqdn} cannot coexist with other records'
+            )
+
 
         node.add(record)
 
@@ -113,7 +116,7 @@ class Zone(object):
             if record.ignored:
                 continue
             elif len(record.included) > 0 and \
-                    target.id not in record.included:
+                        target.id not in record.included:
                 self.log.debug('changes:  skipping record=%s %s - %s not'
                                ' included ', record.fqdn, record._type,
                                target.id)
@@ -128,7 +131,7 @@ class Zone(object):
                 if desired_record.ignored:
                     continue
                 elif len(desired_record.included) > 0 and \
-                        target.id not in desired_record.included:
+                            target.id not in desired_record.included:
                     self.log.debug('changes:  skipping record=%s %s - %s'
                                    'not included ', record.fqdn, record._type,
                                    target.id)
@@ -146,8 +149,7 @@ class Zone(object):
                                record)
                 changes.append(Delete(record))
             else:
-                change = record.changes(desired_record, target)
-                if change:
+                if change := record.changes(desired_record, target):
                     self.log.debug('changes: zone=%s, modified\n'
                                    '    existing=%s,\n     desired=%s', self,
                                    record, desired_record)
@@ -163,7 +165,7 @@ class Zone(object):
             if record.ignored:
                 continue
             elif len(record.included) > 0 and \
-                    target.id not in record.included:
+                        target.id not in record.included:
                 self.log.debug('changes:  skipping record=%s %s - %s not'
                                ' included ', record.fqdn, record._type,
                                target.id)
@@ -185,4 +187,4 @@ class Zone(object):
         return changes
 
     def __repr__(self):
-        return 'Zone<{}>'.format(self.name)
+        return f'Zone<{self.name}>'

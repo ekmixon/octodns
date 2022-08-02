@@ -142,7 +142,7 @@ class _CachingDynZone(DynZone):
                     return None
                 # this value shouldn't really matter, it's not tied to
                 # whois or anything
-                hostname = 'hostmaster@{}'.format(zone_name[:-1])
+                hostname = f'hostmaster@{zone_name[:-1]}'
                 # Try again with the params necessary to create
                 dyn_zone = _CachingDynZone(zone_name, ttl=3600,
                                            contact=hostname,
@@ -247,7 +247,7 @@ class DynProvider(BaseProvider):
 
     def __init__(self, id, customer, username, password,
                  traffic_directors_enabled=False, *args, **kwargs):
-        self.log = getLogger('DynProvider[{}]'.format(id))
+        self.log = getLogger(f'DynProvider[{id}]')
         self.log.debug('__init__: id=%s, customer=%s, username=%s, '
                        'password=***, traffic_directors_enabled=%s', id,
                        customer, username, traffic_directors_enabled)
@@ -424,13 +424,13 @@ class DynProvider(BaseProvider):
         for ruleset in rulesets:
             try:
                 record_set = ruleset.response_pools[0].rs_chains[0] \
-                    .record_sets[0]
+                        .record_sets[0]
             except IndexError:
                 # problems indicate a malformed ruleset, ignore it
                 continue
             if ruleset.label.startswith('default:'):
-                data_for = getattr(self, '_data_for_{}'.format(_type))
-                data.update(data_for(_type, record_set.records))
+                data_for = getattr(self, f'_data_for_{_type}')
+                data |= data_for(_type, record_set.records)
             else:
                 # We've stored the geo in label
                 try:
@@ -465,8 +465,8 @@ class DynProvider(BaseProvider):
         default = {}
         pools = {}
 
-        data_for = getattr(self, '_data_for_{}'.format(_type))
-        value_for = getattr(self, '_value_for_{}'.format(_type))
+        data_for = getattr(self, f'_data_for_{_type}')
+        value_for = getattr(self, f'_value_for_{_type}')
 
         # Build the list of pools, we can't just read them off of rules b/c we
         # won't see unused pools there. If/when we dis-allow unused pools we
@@ -478,7 +478,7 @@ class DynProvider(BaseProvider):
             response_pool.refresh()
             try:
                 record_set = response_pool.rs_chains[0] \
-                    .record_sets[0]
+                        .record_sets[0]
             except IndexError:
                 # problems indicate a malformed ruleset, ignore it
                 self.log.warn('_populate_dynamic_pools: '
@@ -491,17 +491,16 @@ class DynProvider(BaseProvider):
             if label == 'default':
                 # The default pool has the base record values
                 default = data_for(_type, record_set.records)
-            else:
-                if label not in pools:
-                    # First time we've seen it get its data
-                    # Note we'll have to set fallbacks as we go through rules
-                    # b/c we can't determine them here
-                    values = [value_for(_type, r) for r in record_set.records]
-                    # Sort to ensure consistent ordering so we can compare them
-                    values.sort(key=_dynamic_value_sort_key)
-                    pools[label] = {
-                        'values': values,
-                    }
+            elif label not in pools:
+                # First time we've seen it get its data
+                # Note we'll have to set fallbacks as we go through rules
+                # b/c we can't determine them here
+                values = [value_for(_type, r) for r in record_set.records]
+                # Sort to ensure consistent ordering so we can compare them
+                values.sort(key=_dynamic_value_sort_key)
+                pools[label] = {
+                    'values': values,
+                }
 
         return default, pools
 
@@ -546,21 +545,16 @@ class DynProvider(BaseProvider):
             if criteria_type == 'geoip':
                 # Geo
                 geo = ruleset.criteria['geoip']
-                geos = []
-                # Dyn uses the same 2-letter codes as octoDNS (except for
-                # continents) but it doesn't have the hierary, e.g. US is
-                # just US, not NA-US. We'll have to map these things back
-                for code in geo['country']:
-                    geos.append(GeoCodes.country_to_code(code))
-                for code in geo['province']:
-                    geos.append(GeoCodes.province_to_code(code.upper()))
-                for code in geo['region']:
-                    geos.append(self.REGION_CODES_LOOKUP[int(code)])
+                geos = [GeoCodes.country_to_code(code) for code in geo['country']]
+                geos.extend(
+                    GeoCodes.province_to_code(code.upper())
+                    for code in geo['province']
+                )
+
+                geos.extend(self.REGION_CODES_LOOKUP[int(code)] for code in geo['region'])
                 geos.sort()
                 rule['geos'] = geos
-            elif criteria_type == 'always':
-                pass
-            else:
+            elif criteria_type != 'always':
                 self.log.warn('_populate_dynamic_rules: '
                               'unsupported criteria_type "%s", ignoring',
                               criteria_type)
@@ -596,7 +590,7 @@ class DynProvider(BaseProvider):
             'ttl': td.ttl,
         }
         # Include default's information in data
-        data.update(default)
+        data |= default
 
         name = zone.hostname_from_fqdn(fqdn)
         record = Record.new(zone, name, data, source=self, lenient=lenient)
@@ -626,7 +620,7 @@ class DynProvider(BaseProvider):
         for fqdn, types in self.traffic_directors.items():
             for _type, td in types.items():
                 # Does this TD belong to the current zone
-                td_zone = '{}.'.format(td.nodes[0]['zone'])
+                td_zone = f"{td.nodes[0]['zone']}."
                 if td_zone != zone.name:
                     # Doesn't belong to the current zone, skip it
                     continue
@@ -634,13 +628,13 @@ class DynProvider(BaseProvider):
                 rulesets = td.rulesets
                 if self._is_traffic_director_dynamic(td, rulesets):
                     record = \
-                        self._populate_dynamic_traffic_director(zone, fqdn,
+                            self._populate_dynamic_traffic_director(zone, fqdn,
                                                                 _type, td,
                                                                 rulesets,
                                                                 lenient)
                 else:
                     record = \
-                        self._populate_geo_traffic_director(zone, fqdn, _type,
+                            self._populate_geo_traffic_director(zone, fqdn, _type,
                                                             td, rulesets,
                                                             lenient)
                 td_records.add(record)
@@ -661,9 +655,7 @@ class DynProvider(BaseProvider):
             td_records = self._populate_traffic_directors(zone, lenient)
             exists = True
 
-        dyn_zone = _CachingDynZone.get(zone.name[:-1])
-
-        if dyn_zone:
+        if dyn_zone := _CachingDynZone.get(zone.name[:-1]):
             exists = True
             values = defaultdict(lambda: defaultdict(list))
             for _type, records in dyn_zone.get_all_records().items():
@@ -676,7 +668,7 @@ class DynProvider(BaseProvider):
 
             for name, types in values.items():
                 for _type, records in types.items():
-                    data_for = getattr(self, '_data_for_{}'.format(_type))
+                    data_for = getattr(self, f'_data_for_{_type}')
                     data = data_for(_type, records)
                     record = Record.new(zone, name, data, source=self,
                                         lenient=lenient)
@@ -690,14 +682,14 @@ class DynProvider(BaseProvider):
     def _extra_changes(self, desired, changes, **kwargs):
         self.log.debug('_extra_changes: desired=%s', desired.name)
 
-        changed = set([c.record for c in changes])
+        changed = {c.record for c in changes}
 
         extra = []
         for record in desired.records:
             if record in changed or not getattr(record, 'geo', False):
                 # Already changed, or no geo, no need to check it
                 continue
-            label = '{}:{}'.format(record.fqdn, record._type)
+            label = f'{record.fqdn}:{record._type}'
             try:
                 monitor = self.traffic_director_monitors[label]
             except KeyError:
@@ -812,7 +804,7 @@ class DynProvider(BaseProvider):
 
     def _traffic_director_monitor(self, record):
         fqdn = record.fqdn
-        label = '{}:{}'.format(fqdn, record._type)
+        label = f'{fqdn}:{record._type}'
         try:
             try:
                 monitor = self.traffic_director_monitors[label]
@@ -826,7 +818,7 @@ class DynProvider(BaseProvider):
                               'to %s', label)
                 monitor.label = label
                 self.traffic_director_monitors[label] = \
-                    self.traffic_director_monitors[fqdn]
+                        self.traffic_director_monitors[fqdn]
                 del self.traffic_director_monitors[fqdn]
             if _monitor_doesnt_match(monitor, record.healthcheck_host(),
                                      record.healthcheck_path,
@@ -920,14 +912,14 @@ class DynProvider(BaseProvider):
                 continue
             # And the (sorted) values must match once converted for comparison
             # purposes
-            value_for = getattr(self, '_value_for_{}'.format(_type))
+            value_for = getattr(self, f'_value_for_{_type}')
             record_values = [value_for(_type, r) for r in records]
             if record_values == values:
                 # it's a match
                 return pool
 
         # We don't have this pool and thus need to create it
-        records_for = getattr(self, '_dynamic_records_for_{}'.format(_type))
+        records_for = getattr(self, f'_dynamic_records_for_{_type}')
         records = records_for(values, record_extras)
         record_set = DSFRecordSet(_type, label, serve_count=1, records=records,
                                   dsf_monitor_id=monitor_id)
@@ -996,7 +988,7 @@ class DynProvider(BaseProvider):
         self.log.debug('_mod_geo_rulesets: insert_at=%d', insert_at)
 
         # add the default
-        label = 'default:{}'.format(uuid4().hex)
+        label = f'default:{uuid4().hex}'
         ruleset = DSFRuleset(label, 'always', [])
         ruleset.create(td, index=insert_at)
         pool = self._find_or_create_geo_pool(td, pools, 'default', new._type,
@@ -1026,7 +1018,7 @@ class DynProvider(BaseProvider):
                     'region': self.REGION_CODES[geo.continent_code]
                 }
 
-            label = '{}:{}'.format(geo.code, uuid4().hex)
+            label = f'{geo.code}:{uuid4().hex}'
             ruleset = DSFRuleset(label, 'geoip', [], {
                 'geoip': criteria
             })
@@ -1068,7 +1060,7 @@ class DynProvider(BaseProvider):
         new = change.new
         fqdn = new.fqdn
         _type = new._type
-        label = '{}:{}'.format(fqdn, _type)
+        label = f'{fqdn}:{_type}'
         node = DSFNode(new.zone.name, fqdn)
         td = TrafficDirector(label, ttl=new.ttl, nodes=[node], publish='Y')
         self.log.debug('_mod_geo_Create: td=%s', td.service_id)
@@ -1158,7 +1150,7 @@ class DynProvider(BaseProvider):
         self.log.debug('_mod_dynamic_rulesets: insert_at=%d', insert_at)
 
         # Add the base record values as the ultimate/unhealthchecked default
-        label = 'default:{}'.format(uuid4().hex)
+        label = f'default:{uuid4().hex}'
         ruleset = DSFRuleset(label, 'always', [])
         ruleset.create(td, index=insert_at)
         # If/when we go beyond A, AAAA, and CNAME this will have to get
@@ -1216,15 +1208,15 @@ class DynProvider(BaseProvider):
                 geo = GeoCodes.parse(geo)
                 if geo['province_code']:
                     criteria['geoip']['province'] \
-                        .append(geo['province_code'].lower())
+                            .append(geo['province_code'].lower())
                 elif geo['country_code']:
                     criteria['geoip']['country'] \
-                        .append(geo['country_code'])
+                            .append(geo['country_code'])
                 else:
                     criteria['geoip']['region'] \
-                        .append(self.REGION_CODES[geo['continent_code']])
+                            .append(self.REGION_CODES[geo['continent_code']])
 
-            label = '{}:{}'.format(rule_num, uuid4().hex)
+            label = f'{rule_num}:{uuid4().hex}'
             ruleset = DSFRuleset(label, criteria_type, [], criteria)
             # Something you have to call create others the constructor does it
             ruleset.create(td, index=insert_at)
@@ -1236,7 +1228,7 @@ class DynProvider(BaseProvider):
             # OK, we have the rule and its primary pool setup, now look to see
             # if there's a fallback chain that needs to be configured
             fallback = new.dynamic.pools[rule_pool].data.get('fallback', None)
-            seen = set([rule_pool])
+            seen = {rule_pool}
             while fallback and fallback not in seen:
                 seen.add(fallback)
                 # looking at client lib code, index > exists appends
@@ -1277,7 +1269,7 @@ class DynProvider(BaseProvider):
         fqdn = new.fqdn
         _type = new._type
         # Create a new traffic director
-        label = '{}:{}'.format(fqdn, _type)
+        label = f'{fqdn}:{_type}'
         node = DSFNode(new.zone.name, fqdn)
         td = TrafficDirector(label, ttl=new.ttl, nodes=[node], publish='Y')
         self.log.debug('_mod_dynamic_Create: td=%s', td.service_id)
@@ -1335,14 +1327,14 @@ class DynProvider(BaseProvider):
 
     def _mod_Create(self, dyn_zone, change):
         new = change.new
-        kwargs_for = getattr(self, '_kwargs_for_{}'.format(new._type))
+        kwargs_for = getattr(self, f'_kwargs_for_{new._type}')
         for kwargs in kwargs_for(new):
             dyn_zone.add_record(new.name, new._type, **kwargs)
 
     def _mod_Delete(self, dyn_zone, change):
         existing = change.existing
         if existing.name:
-            target = '{}.{}'.format(existing.name, existing.zone.name[:-1])
+            target = f'{existing.name}.{existing.zone.name[:-1]}'
         else:
             target = existing.zone.name[:-1]
         _type = self.TYPE_TO_RECORDS[existing._type]
@@ -1361,12 +1353,11 @@ class DynProvider(BaseProvider):
             # we only mess with changes that have geo info somewhere
             if getattr(c.new, 'dynamic', False) or getattr(c.existing,
                                                            'dynamic', False):
-                mod = getattr(self, '_mod_dynamic_{}'
-                              .format(c.__class__.__name__))
+                mod = getattr(self, f'_mod_dynamic_{c.__class__.__name__}')
                 mod(dyn_zone, c)
             elif getattr(c.new, 'geo', False) or getattr(c.existing, 'geo',
                                                          False):
-                mod = getattr(self, '_mod_geo_{}'.format(c.__class__.__name__))
+                mod = getattr(self, f'_mod_geo_{c.__class__.__name__}')
                 mod(dyn_zone, c)
             else:
                 unhandled_changes.append(c)
@@ -1376,7 +1367,7 @@ class DynProvider(BaseProvider):
     def _apply_regular(self, desired, changes, dyn_zone):
         self.log.debug('_apply_regular: zone=%s', desired.name)
         for c in changes:
-            mod = getattr(self, '_mod_{}'.format(c.__class__.__name__))
+            mod = getattr(self, f'_mod_{c.__class__.__name__}')
             mod(dyn_zone, c)
 
     # TODO: detect "extra" changes when monitors are out of date or failover

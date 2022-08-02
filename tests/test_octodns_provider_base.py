@@ -92,8 +92,11 @@ class TestBaseProvider(TestCase):
         self.assertEquals('Abstract base class, SUPPORTS property missing',
                           text_type(ctx.exception))
 
+
+
         class HasSupports(HasSupportsGeo):
-            SUPPORTS = set(('A',))
+            SUPPORTS = {'A'}
+
         with self.assertRaises(NotImplementedError) as ctx:
             HasSupports('hassupports').populate(zone)
         self.assertEquals('Abstract base class, populate method missing',
@@ -102,7 +105,6 @@ class TestBaseProvider(TestCase):
         # SUPPORTS_DYNAMIC has a default/fallback
         self.assertFalse(HasSupports('hassupports').SUPPORTS_DYNAMIC)
 
-        # But can be overridden
         class HasSupportsDyanmic(HasSupports):
             SUPPORTS_DYNAMIC = True
 
@@ -243,8 +245,7 @@ class TestBaseProvider(TestCase):
             'type': 'A',
             'value': '1.2.3.4',
         })
-        Plan(zone, zone, [Create(record) for i in range(10)], True) \
-            .raise_if_unsafe()
+        Plan(zone, zone, [Create(record) for _ in range(10)], True).raise_if_unsafe()
 
     def test_safe_min_existing_creates(self):
         # Creates are safe when existing records is over MIN_EXISTING_RECORDS

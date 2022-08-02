@@ -25,9 +25,12 @@ class SortEnforcingLoader(SafeLoader):
         for key in keys:
             expected = keys_sorted.pop(0)
             if key != expected:
-                raise ConstructorError(None, None, 'keys out of order: '
-                                       'expected {} got {} at {}'
-                                       .format(expected, key, node.start_mark))
+                raise ConstructorError(
+                    None,
+                    None,
+                    f'keys out of order: expected {expected} got {key} at {node.start_mark}',
+                )
+
         return dict(ret)
 
 
@@ -62,7 +65,7 @@ def safe_dump(data, fh, **options):
         'indent': 2,
         'default_style': '',
         'default_flow_style': False,
-        'explicit_start': True
-    }
-    kwargs.update(options)
+        'explicit_start': True,
+    } | options
+
     dump(data, fh, SortingDumper, **kwargs)

@@ -43,13 +43,13 @@ class TestZone(TestCase):
         c = ARecord(zone, 'a', {'ttl': 43, 'value': '2.2.2.2'})
 
         zone.add_record(a)
-        self.assertEquals(zone.records, set([a]))
+        self.assertEquals(zone.records, {a})
         # Can't add record with same name & type
         with self.assertRaises(DuplicateRecordException) as ctx:
             zone.add_record(a)
         self.assertEquals('Duplicate record a.unit.tests., type A',
                           text_type(ctx.exception))
-        self.assertEquals(zone.records, set([a]))
+        self.assertEquals(zone.records, {a})
 
         # can add duplicate with replace=True
         zone.add_record(c, replace=True)
@@ -57,7 +57,7 @@ class TestZone(TestCase):
 
         # Can add dup name, with different type
         zone.add_record(b)
-        self.assertEquals(zone.records, set([a, b]))
+        self.assertEquals(zone.records, {a, b})
 
     def test_changes(self):
         before = Zone('unit.tests.', [])
@@ -79,7 +79,7 @@ class TestZone(TestCase):
         c = ARecord(before, 'c', {'ttl': 42, 'value': '1.1.1.1'})
         after.add_record(c)
         after._remove_record(b)
-        self.assertEquals(after.records, set([a, c]))
+        self.assertEquals(after.records, {a, c})
         changes = before.changes(after, target)
         self.assertEquals(2, len(changes))
         for change in changes:
@@ -143,17 +143,17 @@ class TestZone(TestCase):
     def test_sub_zones(self):
 
         # NS for exactly the sub is allowed
-        zone = Zone('unit.tests.', set(['sub', 'barred']))
+        zone = Zone('unit.tests.', {'sub', 'barred'})
         record = Record.new(zone, 'sub', {
             'ttl': 3600,
             'type': 'NS',
             'values': ['1.2.3.4.', '2.3.4.5.'],
         })
         zone.add_record(record)
-        self.assertEquals(set([record]), zone.records)
+        self.assertEquals({record}, zone.records)
 
         # non-NS for exactly the sub is rejected
-        zone = Zone('unit.tests.', set(['sub', 'barred']))
+        zone = Zone('unit.tests.', {'sub', 'barred'})
         record = Record.new(zone, 'sub', {
             'ttl': 3600,
             'type': 'A',
@@ -164,10 +164,10 @@ class TestZone(TestCase):
         self.assertTrue('not of type NS', text_type(ctx.exception))
         # Can add it w/lenient
         zone.add_record(record, lenient=True)
-        self.assertEquals(set([record]), zone.records)
+        self.assertEquals({record}, zone.records)
 
         # NS for something below the sub is rejected
-        zone = Zone('unit.tests.', set(['sub', 'barred']))
+        zone = Zone('unit.tests.', {'sub', 'barred'})
         record = Record.new(zone, 'foo.sub', {
             'ttl': 3600,
             'type': 'NS',
@@ -178,10 +178,10 @@ class TestZone(TestCase):
         self.assertTrue('under a managed sub-zone', text_type(ctx.exception))
         # Can add it w/lenient
         zone.add_record(record, lenient=True)
-        self.assertEquals(set([record]), zone.records)
+        self.assertEquals({record}, zone.records)
 
         # A for something below the sub is rejected
-        zone = Zone('unit.tests.', set(['sub', 'barred']))
+        zone = Zone('unit.tests.', {'sub', 'barred'})
         record = Record.new(zone, 'foo.bar.sub', {
             'ttl': 3600,
             'type': 'A',
@@ -192,7 +192,7 @@ class TestZone(TestCase):
         self.assertTrue('under a managed sub-zone', text_type(ctx.exception))
         # Can add it w/lenient
         zone.add_record(record, lenient=True)
-        self.assertEquals(set([record]), zone.records)
+        self.assertEquals({record}, zone.records)
 
     def test_ignored_records(self):
         zone_normal = Zone('unit.tests.', [])
@@ -244,18 +244,18 @@ class TestZone(TestCase):
         zone.add_record(a)
         with self.assertRaises(InvalidNodeException):
             zone.add_record(cname)
-        self.assertEquals(set([a]), zone.records)
+        self.assertEquals({a}, zone.records)
         zone.add_record(cname, lenient=True)
-        self.assertEquals(set([a, cname]), zone.records)
+        self.assertEquals({a, cname}, zone.records)
 
         # add a to cname
         zone = Zone('unit.tests.', [])
         zone.add_record(cname)
         with self.assertRaises(InvalidNodeException):
             zone.add_record(a)
-        self.assertEquals(set([cname]), zone.records)
+        self.assertEquals({cname}, zone.records)
         zone.add_record(a, lenient=True)
-        self.assertEquals(set([a, cname]), zone.records)
+        self.assertEquals({a, cname}, zone.records)
 
     def test_excluded_records(self):
         zone_normal = Zone('unit.tests.', [])

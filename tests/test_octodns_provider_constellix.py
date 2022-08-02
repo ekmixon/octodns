@@ -94,10 +94,9 @@ class TestConstellixProvider(TestCase):
         with requests_mock() as mock:
             base = 'https://api.dns.constellix.com/v1/domains'
             with open('tests/fixtures/constellix-domains.json') as fh:
-                mock.get('{}{}'.format(base, ''), text=fh.read())
+                mock.get(f'{base}', text=fh.read())
             with open('tests/fixtures/constellix-records.json') as fh:
-                mock.get('{}{}'.format(base, '/123123/records'),
-                         text=fh.read())
+                mock.get(f'{base}/123123/records', text=fh.read())
 
                 zone = Zone('unit.tests.', [])
                 provider.populate(zone)

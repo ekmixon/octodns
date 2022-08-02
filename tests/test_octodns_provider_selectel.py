@@ -196,13 +196,17 @@ class TestSelectelProvider(TestCase):
     @requests_mock.Mocker()
     def test_populate(self, fake_http):
         zone = Zone('unit.tests.', [])
-        fake_http.get('{}/unit.tests/records/'.format(self.API_URL),
-                      json=self.api_record)
-        fake_http.get('{}/'.format(self.API_URL), json=self.domain)
-        fake_http.head('{}/unit.tests/records/'.format(self.API_URL),
-                       headers={'X-Total-Count': str(len(self.api_record))})
-        fake_http.head('{}/'.format(self.API_URL),
-                       headers={'X-Total-Count': str(len(self.domain))})
+        fake_http.get(f'{self.API_URL}/unit.tests/records/', json=self.api_record)
+        fake_http.get(f'{self.API_URL}/', json=self.domain)
+        fake_http.head(
+            f'{self.API_URL}/unit.tests/records/',
+            headers={'X-Total-Count': str(len(self.api_record))},
+        )
+
+        fake_http.head(
+            f'{self.API_URL}/', headers={'X-Total-Count': str(len(self.domain))}
+        )
+
 
         provider = SelectelProvider(123, 'secret_token')
         provider.populate(zone)
@@ -220,13 +224,17 @@ class TestSelectelProvider(TestCase):
                             "email": "support@unit.tests"})
 
         zone = Zone('unit.tests.', [])
-        fake_http.get('{}/unit.tests/records/'.format(self.API_URL),
-                      json=more_record)
-        fake_http.get('{}/'.format(self.API_URL), json=self.domain)
-        fake_http.head('{}/unit.tests/records/'.format(self.API_URL),
-                       headers={'X-Total-Count': str(len(self.api_record))})
-        fake_http.head('{}/'.format(self.API_URL),
-                       headers={'X-Total-Count': str(len(self.domain))})
+        fake_http.get(f'{self.API_URL}/unit.tests/records/', json=more_record)
+        fake_http.get(f'{self.API_URL}/', json=self.domain)
+        fake_http.head(
+            f'{self.API_URL}/unit.tests/records/',
+            headers={'X-Total-Count': str(len(self.api_record))},
+        )
+
+        fake_http.head(
+            f'{self.API_URL}/', headers={'X-Total-Count': str(len(self.domain))}
+        )
+
 
         zone.add_record(Record.new(self.zone, 'unsup', {
             'ttl': 200,
@@ -249,14 +257,17 @@ class TestSelectelProvider(TestCase):
     @requests_mock.Mocker()
     def test_apply(self, fake_http):
 
-        fake_http.get('{}/unit.tests/records/'.format(self.API_URL),
-                      json=list())
-        fake_http.get('{}/'.format(self.API_URL), json=self.domain)
-        fake_http.head('{}/unit.tests/records/'.format(self.API_URL),
-                       headers={'X-Total-Count': '0'})
-        fake_http.head('{}/'.format(self.API_URL),
-                       headers={'X-Total-Count': str(len(self.domain))})
-        fake_http.post('{}/100000/records/'.format(self.API_URL), json=list())
+        fake_http.get(f'{self.API_URL}/unit.tests/records/', json=[])
+        fake_http.get(f'{self.API_URL}/', json=self.domain)
+        fake_http.head(
+            f'{self.API_URL}/unit.tests/records/', headers={'X-Total-Count': '0'}
+        )
+
+        fake_http.head(
+            f'{self.API_URL}/', headers={'X-Total-Count': str(len(self.domain))}
+        )
+
+        fake_http.post(f'{self.API_URL}/100000/records/', json=[])
 
         provider = SelectelProvider(123, 'test_token')
 
@@ -271,9 +282,11 @@ class TestSelectelProvider(TestCase):
 
     @requests_mock.Mocker()
     def test_domain_list(self, fake_http):
-        fake_http.get('{}/'.format(self.API_URL), json=self.domain)
-        fake_http.head('{}/'.format(self.API_URL),
-                       headers={'X-Total-Count': str(len(self.domain))})
+        fake_http.get(f'{self.API_URL}/', json=self.domain)
+        fake_http.head(
+            f'{self.API_URL}/', headers={'X-Total-Count': str(len(self.domain))}
+        )
+
 
         expected = {'unit.tests': self.domain[0]}
         provider = SelectelProvider(123, 'test_token')
@@ -283,9 +296,11 @@ class TestSelectelProvider(TestCase):
 
     @requests_mock.Mocker()
     def test_authentication_fail(self, fake_http):
-        fake_http.get('{}/'.format(self.API_URL), status_code=401)
-        fake_http.head('{}/'.format(self.API_URL),
-                       headers={'X-Total-Count': str(len(self.domain))})
+        fake_http.get(f'{self.API_URL}/', status_code=401)
+        fake_http.head(
+            f'{self.API_URL}/', headers={'X-Total-Count': str(len(self.domain))}
+        )
+
 
         with self.assertRaises(Exception) as ctx:
             SelectelProvider(123, 'fail_token')
@@ -294,20 +309,24 @@ class TestSelectelProvider(TestCase):
 
     @requests_mock.Mocker()
     def test_not_exist_domain(self, fake_http):
-        fake_http.get('{}/'.format(self.API_URL), status_code=404, json='')
-        fake_http.head('{}/'.format(self.API_URL),
-                       headers={'X-Total-Count': str(len(self.domain))})
+        fake_http.get(f'{self.API_URL}/', status_code=404, json='')
+        fake_http.head(
+            f'{self.API_URL}/', headers={'X-Total-Count': str(len(self.domain))}
+        )
 
-        fake_http.post('{}/'.format(self.API_URL),
-                       json={"name": "unit.tests",
-                             "create_date": 1507154178,
-                             "id": 100000})
-        fake_http.get('{}/unit.tests/records/'.format(self.API_URL),
-                      json=list())
-        fake_http.head('{}/unit.tests/records/'.format(self.API_URL),
-                       headers={'X-Total-Count': str(len(self.api_record))})
-        fake_http.post('{}/100000/records/'.format(self.API_URL),
-                       json=list())
+
+        fake_http.post(
+            f'{self.API_URL}/',
+            json={"name": "unit.tests", "create_date": 1507154178, "id": 100000},
+        )
+
+        fake_http.get(f'{self.API_URL}/unit.tests/records/', json=[])
+        fake_http.head(
+            f'{self.API_URL}/unit.tests/records/',
+            headers={'X-Total-Count': str(len(self.api_record))},
+        )
+
+        fake_http.post(f'{self.API_URL}/100000/records/', json=[])
 
         provider = SelectelProvider(123, 'test_token')
 
@@ -322,12 +341,16 @@ class TestSelectelProvider(TestCase):
 
     @requests_mock.Mocker()
     def test_delete_no_exist_record(self, fake_http):
-        fake_http.get('{}/'.format(self.API_URL), json=self.domain)
-        fake_http.get('{}/100000/records/'.format(self.API_URL), json=list())
-        fake_http.head('{}/'.format(self.API_URL),
-                       headers={'X-Total-Count': str(len(self.domain))})
-        fake_http.head('{}/unit.tests/records/'.format(self.API_URL),
-                       headers={'X-Total-Count': '0'})
+        fake_http.get(f'{self.API_URL}/', json=self.domain)
+        fake_http.get(f'{self.API_URL}/100000/records/', json=[])
+        fake_http.head(
+            f'{self.API_URL}/', headers={'X-Total-Count': str(len(self.domain))}
+        )
+
+        fake_http.head(
+            f'{self.API_URL}/unit.tests/records/', headers={'X-Total-Count': '0'}
+        )
+
 
         provider = SelectelProvider(123, 'test_token')
 
@@ -348,23 +371,26 @@ class TestSelectelProvider(TestCase):
                          "type": "A",
                          "id": 100002,
                          "name": "unit.tests"}]  # exist
-        fake_http.get('{}/unit.tests/records/'.format(self.API_URL),
-                      json=exist_record)
-        fake_http.get('{}/'.format(self.API_URL), json=self.domain)
-        fake_http.get('{}/100000/records/'.format(self.API_URL),
-                      json=exist_record)
-        fake_http.head('{}/unit.tests/records/'.format(self.API_URL),
-                       headers={'X-Total-Count': str(len(exist_record))})
-        fake_http.head('{}/'.format(self.API_URL),
-                       headers={'X-Total-Count': str(len(self.domain))})
-        fake_http.head('{}/100000/records/'.format(self.API_URL),
-                       headers={'X-Total-Count': str(len(exist_record))})
-        fake_http.post('{}/100000/records/'.format(self.API_URL),
-                       json=list())
-        fake_http.delete('{}/100000/records/100001'.format(self.API_URL),
-                         text="")
-        fake_http.delete('{}/100000/records/100002'.format(self.API_URL),
-                         text="")
+        fake_http.get(f'{self.API_URL}/unit.tests/records/', json=exist_record)
+        fake_http.get(f'{self.API_URL}/', json=self.domain)
+        fake_http.get(f'{self.API_URL}/100000/records/', json=exist_record)
+        fake_http.head(
+            f'{self.API_URL}/unit.tests/records/',
+            headers={'X-Total-Count': str(len(exist_record))},
+        )
+
+        fake_http.head(
+            f'{self.API_URL}/', headers={'X-Total-Count': str(len(self.domain))}
+        )
+
+        fake_http.head(
+            f'{self.API_URL}/100000/records/',
+            headers={'X-Total-Count': str(len(exist_record))},
+        )
+
+        fake_http.post(f'{self.API_URL}/100000/records/', json=[])
+        fake_http.delete(f'{self.API_URL}/100000/records/100001', text="")
+        fake_http.delete(f'{self.API_URL}/100000/records/100002', text="")
 
         provider = SelectelProvider(123, 'test_token')
 
@@ -379,9 +405,11 @@ class TestSelectelProvider(TestCase):
 
     @requests_mock.Mocker()
     def test_include_change_returns_false(self, fake_http):
-        fake_http.get('{}/'.format(self.API_URL), json=self.domain)
-        fake_http.head('{}/'.format(self.API_URL),
-                       headers={'X-Total-Count': str(len(self.domain))})
+        fake_http.get(f'{self.API_URL}/', json=self.domain)
+        fake_http.head(
+            f'{self.API_URL}/', headers={'X-Total-Count': str(len(self.domain))}
+        )
+
         provider = SelectelProvider(123, 'test_token')
         zone = Zone('unit.tests.', [])
 

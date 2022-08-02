@@ -209,7 +209,7 @@ class TestSplitYamlProvider(TestCase):
 
             # This isn't great, but given the variable nature of the temp dir
             # names, it's necessary.
-            d = list(basename(f) for f in _list_all_yaml_files(directory))
+            d = [basename(f) for f in _list_all_yaml_files(directory)]
             self.assertEqual(len(yaml_files), len(d))
 
     def test_zone_directory(self):
@@ -307,7 +307,7 @@ class TestSplitYamlProvider(TestCase):
             # These records are stored as plural "values." Check each file to
             # ensure correctness.
             for record_name in ('_srv._tcp', 'mx', 'naptr', 'sub', 'txt'):
-                yaml_file = join(zone_dir, '{}.yaml'.format(record_name))
+                yaml_file = join(zone_dir, f'{record_name}.yaml')
                 self.assertTrue(isfile(yaml_file))
                 with open(yaml_file) as fh:
                     data = safe_load(fh.read())
@@ -316,7 +316,7 @@ class TestSplitYamlProvider(TestCase):
             # These are stored as singular "value." Again, check each file.
             for record_name in ('aaaa', 'cname', 'dname', 'included', 'ptr',
                                 'spf', 'www.sub', 'www'):
-                yaml_file = join(zone_dir, '{}.yaml'.format(record_name))
+                yaml_file = join(zone_dir, f'{record_name}.yaml')
                 self.assertTrue(isfile(yaml_file))
                 with open(yaml_file) as fh:
                     data = safe_load(fh.read())
@@ -324,8 +324,7 @@ class TestSplitYamlProvider(TestCase):
 
             # Again with the plural, this time checking dynamic.tests.
             for record_name in ('a', 'aaaa', 'real-ish-a'):
-                yaml_file = join(
-                    dynamic_zone_dir, '{}.yaml'.format(record_name))
+                yaml_file = join(dynamic_zone_dir, f'{record_name}.yaml')
                 self.assertTrue(isfile(yaml_file))
                 with open(yaml_file) as fh:
                     data = safe_load(fh.read())
@@ -335,8 +334,7 @@ class TestSplitYamlProvider(TestCase):
 
             # Singular again.
             for record_name in ('cname', 'simple-weighted'):
-                yaml_file = join(
-                    dynamic_zone_dir, '{}.yaml'.format(record_name))
+                yaml_file = join(dynamic_zone_dir, f'{record_name}.yaml')
                 self.assertTrue(isfile(yaml_file))
                 with open(yaml_file) as fh:
                     data = safe_load(fh.read())

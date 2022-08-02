@@ -32,10 +32,9 @@ class OwnershipProcessor(BaseProcessor):
             # Then create and add an ownership TXT for each of them
             record_name = record.name.replace('*', '_wildcard')
             if record.name:
-                name = '{}.{}.{}'.format(self.txt_name, record._type,
-                                         record_name)
+                name = f'{self.txt_name}.{record._type}.{record_name}'
             else:
-                name = '{}.{}'.format(self.txt_name, record._type)
+                name = f'{self.txt_name}.{record._type}'
             txt = Record.new(zone, name, {
                 'type': 'TXT',
                 'ttl': 60,
@@ -85,8 +84,8 @@ class OwnershipProcessor(BaseProcessor):
             record = change.record
 
             if not self._is_ownership(record) and \
-               record._type not in owned[record.name] and \
-               record.name != 'octodns-meta':
+                   record._type not in owned[record.name] and \
+                   record.name != 'octodns-meta':
                 # It's not an ownership TXT, it's not owned, and it's not
                 # special we're going to ignore it
                 continue

@@ -81,10 +81,7 @@ class Plan(object):
                                      existing_record_count))
 
     def __repr__(self):
-        return 'Creates={}, Updates={}, Deletes={}, Existing Records={}' \
-            .format(self.change_counts['Create'], self.change_counts['Update'],
-                    self.change_counts['Delete'],
-                    len(self.existing.records))
+        return f"Creates={self.change_counts['Create']}, Updates={self.change_counts['Update']}, Deletes={self.change_counts['Delete']}, Existing Records={len(self.existing.records)}"
 
 
 class _PlanOutput(object):
@@ -106,11 +103,11 @@ class PlanLogger(_PlanOutput):
                 'error': ERROR
             }[level.lower()]
         except (AttributeError, KeyError):
-            raise Exception('Unsupported level: {}'.format(level))
+            raise Exception(f'Unsupported level: {level}')
 
     def run(self, log, plans, *args, **kwargs):
         hr = '*************************************************************' \
-            '*******************\n'
+                '*******************\n'
         buf = StringIO()
         buf.write('\n')
         if plans:
@@ -157,7 +154,7 @@ def _value_stringifier(record, sep):
         values = [record.value]
     for code, gv in sorted(getattr(record, 'geo', {}).items()):
         vs = ', '.join([text_type(v) for v in gv.values])
-        values.append('{}: {}'.format(code, vs))
+        values.append(f'{code}: {vs}')
     return sep.join(values)
 
 

@@ -84,12 +84,14 @@ class Ns1Client(object):
     def datasource_id(self):
         if self._datasource_id is None:
             name = 'octoDNS NS1 Data Source'
-            source = None
-            for candidate in self.datasource_list():
-                if candidate['name'] == name:
-                    # Found it
-                    source = candidate
-                    break
+            source = next(
+                (
+                    candidate
+                    for candidate in self.datasource_list()
+                    if candidate['name'] == name
+                ),
+                None,
+            )
 
             if source is None:
                 self.log.info('datasource_id: creating datasource %s', name)
@@ -368,7 +370,7 @@ class Ns1Provider(BaseProvider):
 
     def __init__(self, id, api_key, retry_count=4, monitor_regions=None,
                  parallelism=None, client_config=None, *args, **kwargs):
-        self.log = getLogger('Ns1Provider[{}]'.format(id))
+        self.log = getLogger(f'Ns1Provider[{id}]')
         self.log.debug('__init__: id=%s, api_key=***, retry_count=%d, '
                        'monitor_regions=%s, parallelism=%s, client_config=%s',
                        id, retry_count, monitor_regions, parallelism,
@@ -390,20 +392,17 @@ class Ns1Provider(BaseProvider):
     def _get_updated_filter_chain(self, has_region, has_country,
                                   with_disabled=True):
         if has_region and has_country:
-            filter_chain = self._FILTER_CHAIN_WITH_REGION_AND_COUNTRY(
-                with_disabled)
-        elif has_region:
-            filter_chain = self._FILTER_CHAIN_WITH_REGION(with_disabled)
-        elif has_country:
-            filter_chain = self._FILTER_CHAIN_WITH_COUNTRY(with_disabled)
-        else:
-            filter_chain = self._BASIC_FILTER_CHAIN(with_disabled)
+            return self._FILTER_CHAIN_WITH_REGION_AND_COUNTRY(with_disabled)
 
-        return filter_chain
+        elif has_region:
+            return self._FILTER_CHAIN_WITH_REGION(with_disabled)
+        elif has_country:
+            return self._FILTER_CHAIN_WITH_COUNTRY(with_disabled)
+        else:
+            return self._BASIC_FILTER_CHAIN(with_disabled)
 
     def _encode_notes(self, data):
-        return ' '.join(['{}:{}'.format(k, v)
-                         for k, v in sorted(data.items())])
+        return ' '.join([f'{k}:{v}' for k, v in sorted(data.items())])
 
     def _parse_notes(self, note):
         data = {}
@@ -426,8 +425,7 @@ class Ns1Provider(BaseProvider):
         }
         values, codes = [], []
         for answer in record.get('answers', []):
-            meta = answer.get('meta', {})
-            if meta:
+            if meta := answer.get('meta', {}):
                 # country + state and country + province are allowed
                 # in that case though, supplying a state/province would
                 # be redundant since the country would supercede in when
@@ -437,13 +435,13 @@ class Ns1Provider(BaseProvider):
                 ca_province = meta.get('ca_province', [])
                 for cntry in country:
                     con = country_alpha2_to_continent_code(cntry)
-                    key = '{}-{}'.format(con, cntry)
+                    key = f'{con}-{cntry}'
                     geo[key].extend(answer['answer'])
                 for state in us_state:
-                    key = 'NA-US-{}'.format(state)
+                    key = f'NA-US-{state}'
                     geo[key].extend(answer['answer'])
                 for province in ca_province:
-                    key = 'NA-CA-{}'.format(province)
+                    key = f'NA-CA-{province}'
                     geo[key].extend(answer['answer'])
                 for code in meta.get('iso_region_code', []):
                     key = code
@@ -552,10 +550,11 @@ class Ns1Provider(BaseProvider):
                 # set the fallback pool name
                 pools[pool_name]['fallback'] = notes['fallback']
 
-            geos = set()
+            geos = {
+                self._REGION_TO_CONTINENT[georegion]
+                for georegion in meta.get('georegion', [])
+            }
 
-            for georegion in meta.get('georegion', []):
-                geos.add(self._REGION_TO_CONTINENT[georegion])
 
             # Countries are easy enough to map, we just have to find their
             # continent
@@ -567,7 +566,7 @@ class Ns1Provider(BaseProvider):
             # in _CONTINENT_TO_LIST_OF_COUNTRIES[<region>] list are found,
             # set the continent as the region and remove individual countries
 
-            special_continents = dict()
+            special_continents = {}
             for country in meta.get('country', []):
                 # country_alpha2_to_continent_code fails for Pitcairn ('PN'),
                 # United States Minor Outlying Islands ('UM') and
@@ -582,7 +581,7 @@ class Ns1Provider(BaseProvider):
                 if con in self._CONTINENT_TO_LIST_OF_COUNTRIES:
                     special_continents.setdefault(con, set()).add(country)
                 else:
-                    geos.add('{}-{}'.format(con, country))
+                    geos.add(f'{con}-{country}')
 
             for continent, countries in special_continents.items():
                 if countries == self._CONTINENT_TO_LIST_OF_COUNTRIES[
@@ -592,12 +591,12 @@ class Ns1Provider(BaseProvider):
                 else:
                     # Partial countries found, so just add them as-is to geos
                     for c in countries:
-                        geos.add('{}-{}'.format(continent, c))
+                        geos.add(f'{continent}-{c}')
 
             # States are easy too, just assume NA-US (CA providences aren't
             # supported by octoDNS currently)
             for state in meta.get('us_state', []):
-                geos.add('NA-US-{}'.format(state))
+                geos.add(f'NA-US-{state}')
 
             if geos:
                 # There are geos, combine them with any existing geos for this
@@ -728,8 +727,9 @@ class Ns1Provider(BaseProvider):
         return {
             'ttl': record['ttl'],
             'type': _type,
-            'values': [a if a.endswith('.') else '{}.'.format(a)
-                       for a in record['short_answers']],
+            'values': [
+                a if a.endswith('.') else f'{a}.' for a in record['short_answers']
+            ],
         }
 
     def _data_for_SRV(self, _type, record):
@@ -766,7 +766,7 @@ class Ns1Provider(BaseProvider):
                                       'SRV']:
                     for i, a in enumerate(record['short_answers']):
                         if not a.endswith('.'):
-                            record['short_answers'][i] = '{}.'.format(a)
+                            record['short_answers'][i] = f'{a}.'
 
                 if record.get('tier', 1) > 1:
                     # Need to get the full record data for geo records
@@ -793,7 +793,7 @@ class Ns1Provider(BaseProvider):
             _type = record['type']
             if _type not in self.SUPPORTS:
                 continue
-            data_for = getattr(self, '_data_for_{}'.format(_type))
+            data_for = getattr(self, f'_data_for_{_type}')
             name = zone.hostname_from_fqdn(record['domain'])
             data = data_for(_type, record)
             record = Record.new(zone, name, data, source=self, lenient=lenient)
@@ -812,8 +812,8 @@ class Ns1Provider(BaseProvider):
         }
 
         has_country = False
+        key = 'iso_region_code'
         for iso_region, target in record.geo.items():
-            key = 'iso_region_code'
             value = iso_region
             if not has_country and len(value.split('-')) > 1:
                 has_country = True
@@ -850,14 +850,14 @@ class Ns1Provider(BaseProvider):
             for monitor in self._client.monitors.values():
                 data = self._parse_notes(monitor['notes'])
                 if expected_host == data['host'] and \
-                   expected_type == data['type']:
+                       expected_type == data['type']:
                     # This monitor does not belong to this record
                     config = monitor['config']
                     value = config['host']
                     if record._type == 'CNAME':
                         # Append a trailing dot for CNAME records so that
                         # lookup by a CNAME answer works
-                        value = value + '.'
+                        value = f'{value}.'
                     monitors[value] = monitor
 
         return monitors
@@ -869,7 +869,7 @@ class Ns1Provider(BaseProvider):
         monitor_id = monitor['id']
         self.log.debug('_feed_create: monitor=%s', monitor_id)
         # TODO: looks like length limit is 64 char
-        name = '{} - {}'.format(monitor['name'], self._uuid()[:6])
+        name = f"{monitor['name']} - {self._uuid()[:6]}"
 
         # Create the data feed
         config = {
@@ -923,23 +923,26 @@ class Ns1Provider(BaseProvider):
             },
             'frequency': 60,
             'job_type': 'tcp',
-            'name': '{} - {} - {}'.format(host, _type, value),
-            'notes': self._encode_notes({
-                'host': host,
-                'type': _type,
-            }),
+            'name': f'{host} - {_type} - {value}',
+            'notes': self._encode_notes(
+                {
+                    'host': host,
+                    'type': _type,
+                }
+            ),
             'policy': 'quorum',
             'rapid_recheck': False,
             'region_scope': 'fixed',
             'regions': self.monitor_regions,
         }
 
+
         if record.healthcheck_protocol != 'TCP':
             # IF it's HTTP we need to send the request string
             path = record.healthcheck_path
             host = record.healthcheck_host(value=value)
             request = r'GET {path} HTTP/1.0\r\nHost: {host}\r\n' \
-                r'User-agent: NS1\r\n\r\n'.format(path=path, host=host)
+                    r'User-agent: NS1\r\n\r\n'.format(path=path, host=host)
             ret['config']['send'] = request
             # We'll also expect a HTTP response
             ret['rules'] = [{
@@ -951,13 +954,7 @@ class Ns1Provider(BaseProvider):
         return ret
 
     def _monitor_is_match(self, expected, have):
-        # Make sure what we have matches what's in expected exactly. Anything
-        # else in have will be ignored.
-        for k, v in expected.items():
-            if have.get(k, '--missing--') != v:
-                return False
-
-        return True
+        return all(have.get(k, '--missing--') == v for k, v in expected.items())
 
     def _monitor_sync(self, record, value, existing):
         self.log.debug('_monitor_sync: record=%s, value=%s', record.fqdn,
@@ -1000,8 +997,7 @@ class Ns1Provider(BaseProvider):
 
             self.log.debug('_monitors_gc:   deleting %s', monitor_id)
 
-            feed_id = self._client.feeds_for_monitors.get(monitor_id)
-            if feed_id:
+            if feed_id := self._client.feeds_for_monitors.get(monitor_id):
                 self._client.datafeed_delete(self._client.datasource_id,
                                              feed_id)
 

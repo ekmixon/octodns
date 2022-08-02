@@ -38,7 +38,7 @@ class SelectelProvider(BaseProvider):
     API_URL = 'https://api.selectel.ru/domains/v1'
 
     def __init__(self, id, token, *args, **kwargs):
-        self.log = getLogger('SelectelProvider[{}]'.format(id))
+        self.log = getLogger(f'SelectelProvider[{id}]')
         self.log.debug('__init__: id=%s', id)
         super(SelectelProvider, self).__init__(id, *args, **kwargs)
 
@@ -54,7 +54,7 @@ class SelectelProvider(BaseProvider):
     def _request(self, method, path, params=None, data=None):
         self.log.debug('_request: method=%s, path=%s', method, path)
 
-        url = '{}{}'.format(self.API_URL, path)
+        url = f'{self.API_URL}{path}'
         resp = self._sess.request(method, url, params=params, json=data)
 
         self.log.debug('_request: status=%s', resp.status_code)
@@ -63,12 +63,10 @@ class SelectelProvider(BaseProvider):
         elif resp.status_code == 404:
             return {}
         resp.raise_for_status()
-        if method == 'DELETE':
-            return {}
-        return resp.json()
+        return {} if method == 'DELETE' else resp.json()
 
     def _get_total_count(self, path):
-        url = '{}{}'.format(self.API_URL, path)
+        url = f'{self.API_URL}{path}'
         resp = self._sess.request('HEAD', url)
         return int(resp.headers['X-Total-Count'])
 
@@ -100,12 +98,11 @@ class SelectelProvider(BaseProvider):
         zone_name = desired.name[:-1]
         for change in changes:
             class_name = change.__class__.__name__
-            getattr(self, '_apply_{}'.format(class_name).lower())(zone_name,
-                                                                  change)
+            getattr(self, f'_apply_{class_name}'.lower())(zone_name, change)
 
     def _apply_create(self, zone_name, change):
         new = change.new
-        params_for = getattr(self, '_params_for_{}'.format(new._type))
+        params_for = getattr(self, f'_params_for_{new._type}')
         for params in params_for(new):
             self.create_record(zone_name, params)
 
@@ -177,16 +174,15 @@ class SelectelProvider(BaseProvider):
         return {
             'ttl': records[0]['ttl'],
             'type': _type,
-            'values': ['{}.'.format(r['content']) for r in records],
+            'values': [f"{r['content']}." for r in records],
         }
 
     def _data_for_MX(self, _type, records):
-        values = []
-        for record in records:
-            values.append({
-                'preference': record['priority'],
-                'exchange': '{}.'.format(record['content']),
-            })
+        values = [
+            {'preference': record['priority'], 'exchange': f"{record['content']}."}
+            for record in records
+        ]
+
         return {
             'ttl': records[0]['ttl'],
             'type': _type,
@@ -195,11 +191,7 @@ class SelectelProvider(BaseProvider):
 
     def _data_for_CNAME(self, _type, records):
         only = records[0]
-        return {
-            'ttl': only['ttl'],
-            'type': _type,
-            'value': '{}.'.format(only['content'])
-        }
+        return {'ttl': only['ttl'], 'type': _type, 'value': f"{only['content']}."}
 
     def _data_for_TXT(self, _type, records):
         return {
@@ -209,14 +201,15 @@ class SelectelProvider(BaseProvider):
         }
 
     def _data_for_SRV(self, _type, records):
-        values = []
-        for record in records:
-            values.append({
+        values = [
+            {
                 'priority': record['priority'],
                 'weight': record['weight'],
                 'port': record['port'],
-                'target': '{}.'.format(record['target']),
-            })
+                'target': f"{record['target']}.",
+            }
+            for record in records
+        ]
 
         return {
             'type': _type,
@@ -228,17 +221,16 @@ class SelectelProvider(BaseProvider):
         self.log.debug('populate: name=%s, target=%s, lenient=%s',
                        zone.name, target, lenient)
         before = len(zone.records)
-        records = self.zone_records(zone)
-        if records:
+        if records := self.zone_records(zone):
             values = defaultdict(lambda: defaultdict(list))
             for record in records:
                 name = zone.hostname_from_fqdn(record['name'])
                 _type = record['type']
                 if _type in self.SUPPORTS:
-                    values[name][record['type']].append(record)
+                    values[name][_type].append(record)
             for name, types in values.items():
                 for _type, records in types.items():
-                    data_for = getattr(self, '_data_for_{}'.format(_type))
+                    data_for = getattr(self, f'_data_for_{_type}')
                     data = data_for(_type, records)
                     record = Record.new(zone, name, data, source=self,
                                         lenient=lenient)
@@ -248,18 +240,15 @@ class SelectelProvider(BaseProvider):
 
     def domain_list(self):
         path = '/'
-        domains = {}
         domains_list = []
 
         total_count = self._get_total_count(path)
         domains_list = self._request_with_pagination(path, total_count)
 
-        for domain in domains_list:
-            domains[domain['name']] = domain
-        return domains
+        return {domain['name']: domain for domain in domains_list}
 
     def zone_records(self, zone):
-        path = '/{}/records/'.format(zone.name[:-1])
+        path = f'/{zone.name[:-1]}/records/'
         zone_records = []
 
         total_count = self._get_total_count(path)
@@ -287,24 +276,24 @@ class SelectelProvider(BaseProvider):
         else:
             domain_id = self.create_domain(zone_name)['id']
 
-        path = '/{}/records/'.format(domain_id)
+        path = f'/{domain_id}/records/'
         return self._request('POST', path, data=data)
 
     def delete_record(self, domain, _type, zone):
         self.log.debug('Delete record. Domain: %s, Type: %s', domain, _type)
 
         domain_id = self._domain_list[domain]['id']
-        records = self._zone_records.get('{}.'.format(domain), False)
+        records = self._zone_records.get(f'{domain}.', False)
         if not records:
-            path = '/{}/records/'.format(domain_id)
+            path = f'/{domain_id}/records/'
             records = self._request('GET', path)
 
         for record in records:
             full_domain = domain
             if zone:
-                full_domain = '{}{}'.format(zone, domain)
+                full_domain = f'{zone}{domain}'
             if record['type'] == _type and record['name'] == full_domain:
-                path = '/{}/records/{}'.format(domain_id, record['id'])
+                path = f"/{domain_id}/records/{record['id']}"
                 return self._request('DELETE', path)
 
         self.log.debug('Delete record failed (Record not found)')

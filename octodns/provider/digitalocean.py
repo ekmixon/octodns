@@ -34,11 +34,11 @@ class DigitalOceanClient(object):
 
     def __init__(self, token):
         sess = Session()
-        sess.headers.update({'Authorization': 'Bearer {}'.format(token)})
+        sess.headers.update({'Authorization': f'Bearer {token}'})
         self._sess = sess
 
     def _request(self, method, path, params=None, data=None):
-        url = '{}{}'.format(self.BASE, path)
+        url = f'{self.BASE}{path}'
         resp = self._sess.request(method, url, params=params, json=data)
         if resp.status_code == 401:
             raise DigitalOceanClientUnauthorized()
@@ -48,7 +48,7 @@ class DigitalOceanClient(object):
         return resp
 
     def domain(self, name):
-        path = '/domains/{}'.format(name)
+        path = f'/domains/{name}'
         return self._request('GET', path).json()
 
     def domain_create(self, name):
@@ -63,7 +63,7 @@ class DigitalOceanClient(object):
                 self.record_delete(name, record['id'])
 
     def records(self, zone_name):
-        path = '/domains/{}/records'.format(zone_name)
+        path = f'/domains/{zone_name}/records'
         ret = []
 
         page = 1
@@ -94,7 +94,7 @@ class DigitalOceanClient(object):
         return ret
 
     def record_create(self, zone_name, params):
-        path = '/domains/{}/records'.format(zone_name)
+        path = f'/domains/{zone_name}/records'
         # change empty name string to @, DO uses @ for apex record names
         if params['name'] == '':
             params['name'] = '@'
@@ -102,7 +102,7 @@ class DigitalOceanClient(object):
         self._request('POST', path, data=params)
 
     def record_delete(self, zone_name, record_id):
-        path = '/domains/{}/records/{}'.format(zone_name, record_id)
+        path = f'/domains/{zone_name}/records/{record_id}'
         self._request('DELETE', path)
 
 
@@ -120,7 +120,7 @@ class DigitalOceanProvider(BaseProvider):
     SUPPORTS = set(('A', 'AAAA', 'CAA', 'CNAME', 'MX', 'NS', 'TXT', 'SRV'))
 
     def __init__(self, id, token, *args, **kwargs):
-        self.log = logging.getLogger('DigitalOceanProvider[{}]'.format(id))
+        self.log = logging.getLogger(f'DigitalOceanProvider[{id}]')
         self.log.debug('__init__: id=%s, token=***', id)
         super(DigitalOceanProvider, self).__init__(id, *args, **kwargs)
         self._client = DigitalOceanClient(token)
@@ -138,13 +138,15 @@ class DigitalOceanProvider(BaseProvider):
     _data_for_AAAA = _data_for_multiple
 
     def _data_for_CAA(self, _type, records):
-        values = []
-        for record in records:
-            values.append({
+        values = [
+            {
                 'flags': record['flags'],
                 'tag': record['tag'],
                 'value': record['data'],
-            })
+            }
+            for record in records
+        ]
+
         return {
             'ttl': records[0]['ttl'],
             'type': _type,
@@ -153,19 +155,14 @@ class DigitalOceanProvider(BaseProvider):
 
     def _data_for_CNAME(self, _type, records):
         record = records[0]
-        return {
-            'ttl': record['ttl'],
-            'type': _type,
-            'value': '{}.'.format(record['data'])
-        }
+        return {'ttl': record['ttl'], 'type': _type, 'value': f"{record['data']}."}
 
     def _data_for_MX(self, _type, records):
-        values = []
-        for record in records:
-            values.append({
-                'preference': record['priority'],
-                'exchange': '{}.'.format(record['data'])
-            })
+        values = [
+            {'preference': record['priority'], 'exchange': f"{record['data']}."}
+            for record in records
+        ]
+
         return {
             'ttl': records[0]['ttl'],
             'type': _type,
@@ -175,7 +172,7 @@ class DigitalOceanProvider(BaseProvider):
     def _data_for_NS(self, _type, records):
         values = []
         for record in records:
-            data = '{}.'.format(record['data'])
+            data = f"{record['data']}."
             values.append(data)
         return {
             'ttl': records[0]['ttl'],
@@ -186,10 +183,7 @@ class DigitalOceanProvider(BaseProvider):
     def _data_for_SRV(self, _type, records):
         values = []
         for record in records:
-            target = (
-                '{}.'.format(record['data'])
-                if record['data'] != "." else "."
-            )
+            target = f"{record['data']}." if record['data'] != "." else "."
             values.append({
                 'port': record['port'],
                 'priority': record['priority'],
@@ -236,7 +230,7 @@ class DigitalOceanProvider(BaseProvider):
         before = len(zone.records)
         for name, types in values.items():
             for _type, records in types.items():
-                data_for = getattr(self, '_data_for_{}'.format(_type))
+                data_for = getattr(self, f'_data_for_{_type}')
                 record = Record.new(zone, name, data_for(_type, records),
                                     source=self, lenient=lenient)
                 zone.add_record(record, lenient=lenient)
@@ -262,12 +256,12 @@ class DigitalOceanProvider(BaseProvider):
     def _params_for_CAA(self, record):
         for value in record.values:
             yield {
-                'data': '{}.'.format(value.value),
+                'data': f'{value.value}.',
                 'flags': value.flags,
                 'name': record.name,
                 'tag': value.tag,
                 'ttl': record.ttl,
-                'type': record._type
+                'type': record._type,
             }
 
     def _params_for_single(self, record):
@@ -315,7 +309,7 @@ class DigitalOceanProvider(BaseProvider):
 
     def _apply_Create(self, change):
         new = change.new
-        params_for = getattr(self, '_params_for_{}'.format(new._type))
+        params_for = getattr(self, f'_params_for_{new._type}')
         for params in params_for(new):
             self._client.record_create(new.zone.name[:-1], params)
 
@@ -346,7 +340,7 @@ class DigitalOceanProvider(BaseProvider):
 
         for change in changes:
             class_name = change.__class__.__name__
-            getattr(self, '_apply_{}'.format(class_name))(change)
+            getattr(self, f'_apply_{class_name}')(change)
 
         # Clear out the cache if any
         self._zone_records.pop(desired.name, None)

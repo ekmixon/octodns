@@ -46,8 +46,7 @@ class MockDomainService(DomainService):
         _dns_entries = []
         for record in records:
             if record._type in provider.SUPPORTS:
-                entries_for = getattr(provider,
-                                      '_entries_for_{}'.format(record._type))
+                entries_for = getattr(provider, f'_entries_for_{record._type}')
 
                 # Root records have '@' as name
                 name = record.name
@@ -68,7 +67,7 @@ class MockDomainService(DomainService):
     def get_info(self, domain_name):
 
         # Special 'domain' to trigger error
-        if str(domain_name) == str('notfound.unit.tests'):
+        if str(domain_name) == 'notfound.unit.tests':
             self.raiseZoneNotFound()
 
         result = MockResponse()
@@ -78,23 +77,23 @@ class MockDomainService(DomainService):
     def set_dns_entries(self, domain_name, dns_entries):
 
         # Special 'domain' to trigger error
-        if str(domain_name) == str('failsetdns.unit.tests'):
+        if str(domain_name) == 'failsetdns.unit.tests':
             self.raiseSaveError()
 
         return True
 
     def raiseZoneNotFound(self):
-        fault = MockFault(str('102'),  '102 is zone not found')
+        fault = MockFault('102', '102 is zone not found')
         document = {}
         raise WebFault(fault, document)
 
     def raiseInvalidAuth(self):
-        fault = MockFault(str('200'),  '200 is invalid auth')
+        fault = MockFault('200', '200 is invalid auth')
         document = {}
         raise WebFault(fault, document)
 
     def raiseSaveError(self):
-        fault = MockFault(str('200'),  '202 random error')
+        fault = MockFault('200', '202 random error')
         document = {}
         raise WebFault(fault, document)
 
@@ -140,8 +139,9 @@ N4OiVz1I3rbZGYa396lpxO6ku8yCglisL1yrSP6DdEUp66ntpKVd
             TransipProvider('test', 'unittest')
 
         self.assertEquals(
-            str('Missing `key` of `key_file` parameter in config'),
-            str(ctx.exception))
+            'Missing `key` of `key_file` parameter in config', str(ctx.exception)
+        )
+
 
         TransipProvider('test', 'unittest', key=self.bogus_key)
 
@@ -158,10 +158,9 @@ N4OiVz1I3rbZGYa396lpxO6ku8yCglisL1yrSP6DdEUp66ntpKVd
             zone = Zone('unit.tests.', [])
             provider.populate(zone, True)
 
-        self.assertEquals(str('WebFault'),
-                          str(ctx.exception.__class__.__name__))
+        self.assertEquals('WebFault', str(ctx.exception.__class__.__name__))
 
-        self.assertEquals(str('200'), ctx.exception.fault.faultcode)
+        self.assertEquals('200', ctx.exception.fault.faultcode)
 
         # Unhappy Plan - Zone does not exists
         # Will trigger an exception if provider is used as a target for a
@@ -172,8 +171,10 @@ N4OiVz1I3rbZGYa396lpxO6ku8yCglisL1yrSP6DdEUp66ntpKVd
             zone = Zone('notfound.unit.tests.', [])
             provider.populate(zone, True)
 
-        self.assertEquals(str('TransipNewZoneException'),
-                          str(ctx.exception.__class__.__name__))
+        self.assertEquals(
+            'TransipNewZoneException', str(ctx.exception.__class__.__name__)
+        )
+
 
         self.assertEquals(
             'populate: (102) Transip used as target' +
@@ -254,10 +255,9 @@ N4OiVz1I3rbZGYa396lpxO6ku8yCglisL1yrSP6DdEUp66ntpKVd
         # Changes should not be set due to an Exception
         self.assertEqual([], changes)
 
-        self.assertEquals(str('WebFault'),
-                          str(ctx.exception.__class__.__name__))
+        self.assertEquals('WebFault', str(ctx.exception.__class__.__name__))
 
-        self.assertEquals(str('102'), ctx.exception.fault.faultcode)
+        self.assertEquals('102', ctx.exception.fault.faultcode)
 
         # Test unhappy flow. Trigger a unrecoverable error while saving
         _expected = self.make_expected()  # reset expected
@@ -273,5 +273,4 @@ N4OiVz1I3rbZGYa396lpxO6ku8yCglisL1yrSP6DdEUp66ntpKVd
         # Changes should not be set due to an Exception
         self.assertEqual([], changes)
 
-        self.assertEquals(str('TransipException'),
-                          str(ctx.exception.__class__.__name__))
+        self.assertEquals('TransipException', str(ctx.exception.__class__.__name__))

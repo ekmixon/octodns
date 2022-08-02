@@ -84,7 +84,7 @@ class CloudflareProvider(BaseProvider):
     def __init__(self, id, email=None, token=None, cdn=False, retry_count=4,
                  retry_period=300, zones_per_page=50, records_per_page=100,
                  *args, **kwargs):
-        self.log = getLogger('CloudflareProvider[{}]'.format(id))
+        self.log = getLogger(f'CloudflareProvider[{id}]')
         self.log.debug('__init__: id=%s, email=%s, token=***, cdn=%s', id,
                        email, cdn)
         super(CloudflareProvider, self).__init__(id, *args, **kwargs)
@@ -98,9 +98,7 @@ class CloudflareProvider(BaseProvider):
         else:
             # https://api.cloudflare.com/#getting-started-requests
             # https://tools.ietf.org/html/rfc6750#section-2.1
-            sess.headers.update({
-                'Authorization': 'Bearer {}'.format(token),
-            })
+            sess.headers.update({'Authorization': f'Bearer {token}'})
         self.cdn = cdn
         self.retry_count = retry_count
         self.retry_period = retry_period
@@ -128,7 +126,7 @@ class CloudflareProvider(BaseProvider):
     def _request(self, method, path, params=None, data=None):
         self.log.debug('_request: method=%s, path=%s', method, path)
 
-        url = 'https://api.cloudflare.com/client/v4{}'.format(path)
+        url = f'https://api.cloudflare.com/client/v4{path}'
         resp = self._sess.request(method, url, params=params, json=data,
                                   timeout=self.TIMEOUT)
         self.log.debug('_request:   status=%d', resp.status_code)
@@ -166,20 +164,17 @@ class CloudflareProvider(BaseProvider):
                 else:
                     page = None
 
-            self._zones = {'{}.'.format(z['name']): z['id'] for z in zones}
+            self._zones = {f"{z['name']}.": z['id'] for z in zones}
 
         return self._zones
 
     def _data_for_cdn(self, name, _type, records):
         self.log.info('CDN rewrite for %s', records[0]['name'])
-        _type = "CNAME"
-        if name == "":
-            _type = "ALIAS"
-
+        _type = "ALIAS" if name == "" else "CNAME"
         return {
             'ttl': records[0]['ttl'],
             'type': _type,
-            'value': '{}.cdn.cloudflare.net.'.format(records[0]['name']),
+            'value': f"{records[0]['name']}.cdn.cloudflare.net.",
         }
 
     def _data_for_multiple(self, _type, records):
@@ -201,10 +196,7 @@ class CloudflareProvider(BaseProvider):
         }
 
     def _data_for_CAA(self, _type, records):
-        values = []
-        for r in records:
-            data = r['data']
-            values.append(data)
+        values = [r['data'] for r in records]
         return {
             'ttl': records[0]['ttl'],
             'type': _type,
@@ -213,11 +205,7 @@ class CloudflareProvider(BaseProvider):
 
     def _data_for_CNAME(self, _type, records):
         only = records[0]
-        return {
-            'ttl': only['ttl'],
-            'type': _type,
-            'value': '{}.'.format(only['content'])
-        }
+        return {'ttl': only['ttl'], 'type': _type, 'value': f"{only['content']}."}
 
     _data_for_ALIAS = _data_for_CNAME
     _data_for_PTR = _data_for_CNAME
@@ -247,12 +235,11 @@ class CloudflareProvider(BaseProvider):
         }
 
     def _data_for_MX(self, _type, records):
-        values = []
-        for r in records:
-            values.append({
-                'preference': r['priority'],
-                'exchange': '{}.'.format(r['content']),
-            })
+        values = [
+            {'preference': r['priority'], 'exchange': f"{r['content']}."}
+            for r in records
+        ]
+
         return {
             'ttl': records[0]['ttl'],
             'type': _type,
@@ -263,14 +250,13 @@ class CloudflareProvider(BaseProvider):
         return {
             'ttl': records[0]['ttl'],
             'type': _type,
-            'values': ['{}.'.format(r['content']) for r in records],
+            'values': [f"{r['content']}." for r in records],
         }
 
     def _data_for_SRV(self, _type, records):
         values = []
         for r in records:
-            target = ('{}.'.format(r['data']['target'])
-                      if r['data']['target'] != "." else ".")
+            target = f"{r['data']['target']}." if r['data']['target'] != "." else "."
             values.append({
                 'priority': r['data']['priority'],
                 'weight': r['data']['weight'],
@@ -290,7 +276,7 @@ class CloudflareProvider(BaseProvider):
                 return []
 
             records = []
-            path = '/zones/{}/dns_records'.format(zone_id)
+            path = f'/zones/{zone_id}/dns_records'
             page = 1
             while page:
                 resp = self._try_request('GET', path, params={'page': page,
@@ -315,7 +301,7 @@ class CloudflareProvider(BaseProvider):
             if _type == 'CNAME' and name == '':
                 _type = 'ALIAS'
 
-            data_for = getattr(self, '_data_for_{}'.format(_type))
+            data_for = getattr(self, f'_data_for_{_type}')
             data = data_for(_type, records)
 
         record = Record.new(zone, name, data, source=self, lenient=lenient)
@@ -333,16 +319,14 @@ class CloudflareProvider(BaseProvider):
 
         exists = False
         before = len(zone.records)
-        records = self.zone_records(zone)
-        if records:
+        if records := self.zone_records(zone):
             exists = True
             values = defaultdict(lambda: defaultdict(list))
             for record in records:
                 name = zone.hostname_from_fqdn(record['name'])
                 _type = record['type']
                 if _type in self.SUPPORTS:
-                    values[name][record['type']].append(record)
-
+                    values[name][_type].append(record)
             for name, types in values.items():
                 for _type, records in types.items():
                     record = self._record_for(zone, name, _type, records,
@@ -382,11 +366,10 @@ class CloudflareProvider(BaseProvider):
 
         # If this is a record to enable Cloudflare CDN don't update as
         # we don't know the original values.
-        if (change.record._type in ('ALIAS', 'CNAME') and
-                change.record.value.endswith('.cdn.cloudflare.net.')):
-            return False
-
-        return True
+        return change.record._type not in (
+            'ALIAS',
+            'CNAME',
+        ) or not change.record.value.endswith('.cdn.cloudflare.net.')
 
     def _contents_for_multiple(self, record):
         for value in record.values:
@@ -485,7 +468,7 @@ class CloudflareProvider(BaseProvider):
         if _type == 'ALIAS':
             _type = 'CNAME'
 
-        contents_for = getattr(self, '_contents_for_{}'.format(_type))
+        contents_for = getattr(self, f'_contents_for_{_type}')
         for content in contents_for(record):
             content.update({
                 'name': name,
@@ -542,7 +525,7 @@ class CloudflareProvider(BaseProvider):
     def _apply_Create(self, change):
         new = change.new
         zone_id = self.zones[new.zone.name]
-        path = '/zones/{}/dns_records'.format(zone_id)
+        path = f'/zones/{zone_id}/dns_records'
         for content in self._gen_data(new):
             self._try_request('POST', path, data=content)
 
@@ -579,10 +562,7 @@ class CloudflareProvider(BaseProvider):
 
         # OK we now have a picture of the old & new CF records, our next step
         # is to figure out which records need to be deleted
-        deletes = {}
-        for key, info in existing.items():
-            if key not in new:
-                deletes[key] = info
+        deletes = {key: info for key, info in existing.items() if key not in new}
         # Now we need to figure out which records will need to be created
         creates = {}
         # And which will be updated
@@ -616,7 +596,7 @@ class CloudflareProvider(BaseProvider):
         # there's a single create and delete result in a single update instead.
         create_keys = sorted(creates.keys())
         delete_keys = sorted(deletes.keys())
-        for i in range(0, min(len(create_keys), len(delete_keys))):
+        for i in range(min(len(create_keys), len(delete_keys))):
             create_key = create_keys[i]
             create_data = creates.pop(create_key)
             delete_info = deletes.pop(delete_keys[i])
@@ -630,7 +610,7 @@ class CloudflareProvider(BaseProvider):
         # otherwise required, just makes things deterministic
 
         # Creates
-        path = '/zones/{}/dns_records'.format(zone_id)
+        path = f'/zones/{zone_id}/dns_records'
         for _, data in sorted(creates.items()):
             self.log.debug('_apply_Update: creating %s', data)
             self._try_request('POST', path, data=data)
@@ -640,7 +620,7 @@ class CloudflareProvider(BaseProvider):
             record_id = info['record_id']
             data = info['data']
             old_data = info['old_data']
-            path = '/zones/{}/dns_records/{}'.format(zone_id, record_id)
+            path = f'/zones/{zone_id}/dns_records/{record_id}'
             self.log.debug('_apply_Update: updating %s, %s -> %s',
                            record_id, data, old_data)
             self._try_request('PUT', path, data=data)
@@ -649,7 +629,7 @@ class CloudflareProvider(BaseProvider):
         for _, info in sorted(deletes.items()):
             record_id = info['record_id']
             old_data = info['data']
-            path = '/zones/{}/dns_records/{}'.format(zone_id, record_id)
+            path = f'/zones/{zone_id}/dns_records/{record_id}'
             self.log.debug('_apply_Update: removing %s, %s', record_id,
                            old_data)
             self._try_request('DELETE', path)
@@ -659,12 +639,11 @@ class CloudflareProvider(BaseProvider):
         existing_name = existing.fqdn[:-1]
         # Make sure to map ALIAS to CNAME when looking for the target to delete
         existing_type = 'CNAME' if existing._type == 'ALIAS' \
-            else existing._type
+                else existing._type
         for record in self.zone_records(existing.zone):
             if existing_name == record['name'] and \
-               existing_type == record['type']:
-                path = '/zones/{}/dns_records/{}'.format(record['zone_id'],
-                                                         record['id'])
+                   existing_type == record['type']:
+                path = f"/zones/{record['zone_id']}/dns_records/{record['id']}"
                 self._try_request('DELETE', path)
 
     def _apply(self, plan):
@@ -692,7 +671,7 @@ class CloudflareProvider(BaseProvider):
 
         for change in changes:
             class_name = change.__class__.__name__
-            getattr(self, '_apply_{}'.format(class_name))(change)
+            getattr(self, f'_apply_{class_name}')(change)
 
         # clear the cache
         self._zone_records.pop(name, None)
@@ -704,12 +683,9 @@ class CloudflareProvider(BaseProvider):
         changed_records = {c.record for c in changes}
 
         for desired_record in desired.records:
-            existing_record = existing_records.get(desired_record, None)
-            if not existing_record:  # Will be created
+            existing_record = existing_records.get(desired_record)
+            if not existing_record or desired_record in changed_records:  # Will be created
                 continue
-            elif desired_record in changed_records:  # Already being updated
-                continue
-
             if (self._record_is_proxied(existing_record) !=
                     self._record_is_proxied(desired_record)):
                 extra_changes.append(Update(existing_record, desired_record))

@@ -53,13 +53,13 @@ def main():
     try:
         sources = [manager.providers[source] for source in args.source]
     except KeyError as e:
-        raise Exception('Unknown source: {}'.format(e.args[0]))
+        raise Exception(f'Unknown source: {e.args[0]}')
 
     zone = manager.get_zone(args.zone)
     for source in sources:
         source.populate(zone)
 
-    print('name,type,ttl,{},consistent'.format(','.join(args.server)))
+    print(f"name,type,ttl,{','.join(args.server)},consistent")
     resolvers = []
     ip_addr_re = re.compile(r'^[\d\.]+$')
     for server in args.server:
@@ -72,10 +72,10 @@ def main():
         resolver.lifetime = int(args.timeout)
         resolvers.append(resolver)
 
-    queries = {}
-    for record in sorted(zone.records):
-        queries[record] = [r.query(record.fqdn, record._type)
-                           for r in resolvers]
+    queries = {
+        record: [r.query(record.fqdn, record._type) for r in resolvers]
+        for record in sorted(zone.records)
+    }
 
     for record, futures in sorted(queries.items(), key=lambda d: d[0]):
         stdout.write(record.fqdn)

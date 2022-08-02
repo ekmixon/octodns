@@ -34,7 +34,7 @@ class DnsimpleClient(object):
     def __init__(self, token, account, sandbox):
         self.account = account
         sess = Session()
-        sess.headers.update({'Authorization': 'Bearer {}'.format(token)})
+        sess.headers.update({'Authorization': f'Bearer {token}'})
         self._sess = sess
         if sandbox:
             self.base = 'https://api.sandbox.dnsimple.com/v2/'
@@ -42,7 +42,7 @@ class DnsimpleClient(object):
             self.base = 'https://api.dnsimple.com/v2/'
 
     def _request(self, method, path, params=None, data=None):
-        url = '{}{}{}'.format(self.base, self.account, path)
+        url = f'{self.base}{self.account}{path}'
         resp = self._sess.request(method, url, params=params, json=data)
         if resp.status_code == 401:
             raise DnsimpleClientUnauthorized()
@@ -52,7 +52,7 @@ class DnsimpleClient(object):
         return resp
 
     def zone(self, name):
-        path = '/zones/{}'.format(name)
+        path = f'/zones/{name}'
         return self._request('GET', path).json()
 
     def domain_create(self, name):
@@ -63,8 +63,10 @@ class DnsimpleClient(object):
 
         page = 1
         while True:
-            data = self._request('GET', '/zones/{}/records'.format(zone_name),
-                                 {'page': page}).json()
+            data = self._request(
+                'GET', f'/zones/{zone_name}/records', {'page': page}
+            ).json()
+
             ret += data['data']
             pagination = data['pagination']
             if page >= pagination['total_pages']:
@@ -74,11 +76,11 @@ class DnsimpleClient(object):
         return ret
 
     def record_create(self, zone_name, params):
-        path = '/zones/{}/records'.format(zone_name)
+        path = f'/zones/{zone_name}/records'
         self._request('POST', path, data=params)
 
     def record_delete(self, zone_name, record_id):
-        path = '/zones/{}/records/{}'.format(zone_name, record_id)
+        path = f'/zones/{zone_name}/records/{record_id}'
         self._request('DELETE', path)
 
 
@@ -101,7 +103,7 @@ class DnsimpleProvider(BaseProvider):
                     'PTR', 'SPF', 'SRV', 'SSHFP', 'TXT'))
 
     def __init__(self, id, token, account, sandbox=False, *args, **kwargs):
-        self.log = logging.getLogger('DnsimpleProvider[{}]'.format(id))
+        self.log = logging.getLogger(f'DnsimpleProvider[{id}]')
         self.log.debug('__init__: id=%s, token=***, account=%s', id, account)
         super(DnsimpleProvider, self).__init__(id, *args, **kwargs)
         self._client = DnsimpleClient(token, account, sandbox)
@@ -144,21 +146,16 @@ class DnsimpleProvider(BaseProvider):
 
     def _data_for_CNAME(self, _type, records):
         record = records[0]
-        return {
-            'ttl': record['ttl'],
-            'type': _type,
-            'value': '{}.'.format(record['content'])
-        }
+        return {'ttl': record['ttl'], 'type': _type, 'value': f"{record['content']}."}
 
     _data_for_ALIAS = _data_for_CNAME
 
     def _data_for_MX(self, _type, records):
-        values = []
-        for record in records:
-            values.append({
-                'preference': record['priority'],
-                'exchange': '{}.'.format(record['content'])
-            })
+        values = [
+            {'preference': record['priority'], 'exchange': f"{record['content']}."}
+            for record in records
+        ]
+
         return {
             'ttl': records[0]['ttl'],
             'type': _type,
@@ -196,7 +193,7 @@ class DnsimpleProvider(BaseProvider):
         for record in records:
             content = record['content']
             if content[-1] != '.':
-                content = '{}.'.format(content)
+                content = f'{content}.'
             values.append(content)
         return {
             'ttl': records[0]['ttl'],
@@ -229,7 +226,7 @@ class DnsimpleProvider(BaseProvider):
                 )
                 continue
 
-            target = '{}.'.format(target) if target != "." else "."
+            target = f'{target}.' if target != "." else "."
 
             values.append({
                 'port': port,
@@ -295,7 +292,7 @@ class DnsimpleProvider(BaseProvider):
         before = len(zone.records)
         for name, types in values.items():
             for _type, records in types.items():
-                data_for = getattr(self, '_data_for_{}'.format(_type))
+                data_for = getattr(self, f'_data_for_{_type}')
                 record = Record.new(zone, name, data_for(_type, records),
                                     source=self, lenient=lenient)
                 zone.add_record(record, lenient=lenient)
@@ -353,11 +350,10 @@ class DnsimpleProvider(BaseProvider):
     def _params_for_CAA(self, record):
         for value in record.values:
             yield {
-                'content': '{} {} "{}"'.format(value.flags, value.tag,
-                                               value.value),
+                'content': f'{value.flags} {value.tag} "{value.value}"',
                 'name': record.name,
                 'ttl': record.ttl,
-                'type': record._type
+                'type': record._type,
             }
 
     def _params_for_single(self, record):
@@ -384,9 +380,8 @@ class DnsimpleProvider(BaseProvider):
 
     def _params_for_NAPTR(self, record):
         for value in record.values:
-            content = '{} {} "{}" "{}" "{}" {}' \
-                .format(value.order, value.preference, value.flags,
-                        value.service, value.regexp, value.replacement)
+            content = f'{value.order} {value.preference} "{value.flags}" "{value.service}" "{value.regexp}" {value.replacement}'
+
             yield {
                 'content': content,
                 'name': record.name,
@@ -397,28 +392,25 @@ class DnsimpleProvider(BaseProvider):
     def _params_for_SRV(self, record):
         for value in record.values:
             yield {
-                'content': '{} {} {}'.format(value.weight, value.port,
-                                             value.target),
+                'content': f'{value.weight} {value.port} {value.target}',
                 'name': record.name,
                 'priority': value.priority,
                 'ttl': record.ttl,
-                'type': record._type
+                'type': record._type,
             }
 
     def _params_for_SSHFP(self, record):
         for value in record.values:
             yield {
-                'content': '{} {} {}'.format(value.algorithm,
-                                             value.fingerprint_type,
-                                             value.fingerprint),
+                'content': f'{value.algorithm} {value.fingerprint_type} {value.fingerprint}',
                 'name': record.name,
                 'ttl': record.ttl,
-                'type': record._type
+                'type': record._type,
             }
 
     def _apply_Create(self, change):
         new = change.new
-        params_for = getattr(self, '_params_for_{}'.format(new._type))
+        params_for = getattr(self, f'_params_for_{new._type}')
         for params in params_for(new):
             self._client.record_create(new.zone.name[:-1], params)
 
@@ -449,7 +441,7 @@ class DnsimpleProvider(BaseProvider):
 
         for change in changes:
             class_name = change.__class__.__name__
-            getattr(self, '_apply_{}'.format(class_name))(change)
+            getattr(self, f'_apply_{class_name}')(change)
 
         # Clear out the cache if any
         self._zone_records.pop(desired.name, None)
