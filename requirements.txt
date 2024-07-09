@@ -27,3 +27,4 @@ s3transfer==0.3.3
 setuptools==44.1.1
 six==1.15.0
 transip==2.1.2
+zipp>=3.19.1 # not directly required, pinned by Snyk to avoid a vulnerability
